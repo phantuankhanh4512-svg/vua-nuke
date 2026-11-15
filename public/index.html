@@ -5,88 +5,32 @@
 <title>nuke panel</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-  :root { 
-    --bg:#050505; --pnl:#0d0d0d; --brd:#1f1f1f; --txt:#e0e0e0; --dim:#777;
-    --acc:#ff3333; --acc-hover:#ff5555;
-    --grn:#00ff88; --ylw:#ffcc00; --blu:#5865F2;
-  }
+  :root { --bg:#050505; --pnl:#0d0d0d; --brd:#1f1f1f; --txt:#e0e0e0; --dim:#777; --acc:#ff3333; --grn:#00ff88; --ylw:#ffcc00; --blu:#5865F2; }
   * { box-sizing:border-box; }
-  body { 
-    background:var(--bg); color:var(--txt); 
-    font-family:'Segoe UI', ui-monospace, monospace; 
-    margin:0; padding:0; min-height:100vh;
-    background-image: radial-gradient(circle at 50% -20%, #200000 0%, var(--bg) 70%);
-  }
-  
-  header {
-    text-align:center; padding:30px 20px 10px;
-  }
-  h1 { 
-    color:#fff; font-size:24px; letter-spacing:6px; margin:0; 
-    text-shadow: 0 0 15px rgba(255,50,50,0.6);
-    display:flex; align-items:center; justify-content:center; gap:10px;
-  }
+  body { background:var(--bg); color:var(--txt); font-family:'Segoe UI', ui-monospace, monospace; margin:0; padding:0; min-height:100vh; background-image: radial-gradient(circle at 50% -20%, #200000 0%, var(--bg) 70%); }
+  header { text-align:center; padding:30px 20px 10px; }
+  h1 { color:#fff; font-size:24px; letter-spacing:6px; margin:0; text-shadow: 0 0 15px rgba(255,50,50,0.6); display:flex; align-items:center; justify-content:center; gap:10px; }
   h1 span { color:var(--acc); }
   .subtitle { color:var(--dim); font-size:12px; margin-top:8px; letter-spacing:2px; }
-
   .wrap { max-width:800px; margin:30px auto; padding:0 20px; display:flex; flex-direction:column; gap:20px; }
-  
-  .panel { 
-    background:rgba(15,15,15,0.7); backdrop-filter:blur(10px);
-    border:1px solid var(--brd); border-radius:12px; padding:24px;
-    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-  }
-  
+  .panel { background:rgba(15,15,15,0.7); backdrop-filter:blur(10px); border:1px solid var(--brd); border-radius:12px; padding:24px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
   label { display:block; margin:15px 0 6px; font-size:11px; color:var(--dim); letter-spacing:1.5px; text-transform:uppercase; font-weight:bold; }
-  input, select { 
-    width:100%; background:#000; border:1px solid #333; color:var(--txt); 
-    padding:12px 16px; font-family:inherit; font-size:14px; border-radius:8px;
-    transition: all 0.2s;
-  }
-  input:focus, select:focus { outline:none; border-color:var(--acc); box-shadow: 0 0 10px rgba(255,50,50,0.2); }
-  
-  button { 
-    width:100%; background:var(--acc); color:#fff; border:0; 
-    padding:16px; font-weight:bold; letter-spacing:2px; cursor:pointer; 
-    font-family:inherit; font-size:14px; border-radius:8px; margin-top:16px;
-    transition: all 0.2s; text-transform:uppercase;
-  }
-  button:hover { background:var(--acc-hover); transform: translateY(-2px); box-shadow: 0 5px 15px rgba(255,50,50,0.3); }
+  input { width:100%; background:#000; border:1px solid #333; color:var(--txt); padding:12px 16px; font-family:inherit; font-size:14px; border-radius:8px; transition: all 0.2s; }
+  input:focus { outline:none; border-color:var(--acc); box-shadow: 0 0 10px rgba(255,50,50,0.2); }
+  button { width:100%; background:var(--acc); color:#fff; border:0; padding:16px; font-weight:bold; letter-spacing:2px; cursor:pointer; font-family:inherit; font-size:14px; border-radius:8px; margin-top:16px; transition: all 0.2s; text-transform:uppercase; }
+  button:hover { background:#ff5555; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(255,50,50,0.3); }
   button:disabled { background:#222; color:#555; cursor:not-allowed; transform:none; box-shadow:none; }
-  
   .btn-outline { background:transparent; border:1px solid #444; color:#ccc; }
   .btn-outline:hover { background:#222; border-color:#666; }
-  
-  .btn-add { 
-    background:var(--blu); color:#fff; text-decoration:none; display:block; 
-    text-align:center; padding:16px; font-weight:bold; border-radius:8px;
-    transition: all 0.2s; margin-bottom:8px; text-transform:uppercase; letter-spacing:1px;
-  }
+  .btn-add { background:var(--blu); color:#fff; text-decoration:none; display:block; text-align:center; padding:16px; font-weight:bold; border-radius:8px; transition: all 0.2s; margin-bottom:8px; text-transform:uppercase; letter-spacing:1px; }
   .btn-add:hover { background:#4752C4; transform: translateY(-2px); box-shadow: 0 5px 15px rgba(88,101,242,0.4); }
-  
   .btn-off { background:#331111; color:#ff8888; border:1px solid #551111; }
   .btn-off:hover { background:#441111; color:#ffaaaa; }
-
   .flex-row { display:flex; gap:12px; }
   .flex-row > * { flex:1; }
-
-  /* TABS */
-  .tabs { display:flex; gap:10px; margin-bottom:16px; border-bottom:1px solid var(--brd); padding-bottom:10px; }
-  .tab { 
-    background:transparent; color:var(--dim); border:none; padding:8px 16px; 
-    cursor:pointer; font-family:inherit; font-size:13px; border-radius:6px;
-    margin-top:0; width:auto; transition:0.2s;
-  }
-  .tab.active { background:#222; color:#fff; }
-  .tab:hover { color:#fff; }
-
-  /* CONSOLE */
   .console-wrapper { padding:0; overflow:hidden; border-radius:12px; }
   .console-header { background:#111; padding:10px 16px; font-size:11px; color:var(--dim); display:flex; justify-content:space-between; border-bottom:1px solid var(--brd); }
-  #logBox { 
-    background:#000; padding:16px; height:350px; overflow-y:auto; 
-    font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; line-height:1.6; 
-  }
+  #logBox { background:#000; padding:16px; height:350px; overflow-y:auto; font-family:ui-monospace, SFMono-Regular, Menlo, monospace; font-size:12px; line-height:1.6; }
   .log-item { margin-bottom:6px; display:flex; gap:10px; align-items:flex-start; }
   .log-time { color:#444; flex-shrink:0; }
   .log-msg { word-break:break-all; }
@@ -94,21 +38,13 @@
   .log-success { color:var(--grn); }
   .log-warn { color:var(--ylw); }
   .log-error { color:var(--acc); }
-
-  /* STATUS BADGE */
-  .status-badge { 
-    display:inline-flex; align-items:center; gap:6px; padding:6px 12px; 
-    border-radius:20px; font-size:12px; font-weight:bold; 
-    background:rgba(0,255,136,0.1); color:var(--grn); border:1px solid rgba(0,255,136,0.3);
-  }
+  .status-badge { display:inline-flex; align-items:center; gap:6px; padding:6px 12px; border-radius:20px; font-size:12px; font-weight:bold; background:rgba(0,255,136,0.1); color:var(--grn); border:1px solid rgba(0,255,136,0.3); }
   .status-badge.offline { background:rgba(255,50,50,0.1); color:var(--acc); border-color:rgba(255,50,50,0.3); }
   .status-dot { width:8px; height:8px; border-radius:50%; background:currentColor; box-shadow:0 0 8px currentColor; }
-
   .hidden { display:none !important; }
 </style>
 </head>
 <body>
-
 <header>
   <h1><span>[</span> NUKE PANEL <span>]</span></h1>
   <div class="subtitle">POWERED BY PHTUANKHANH</div>
@@ -116,33 +52,21 @@
 
 <div class="wrap">
   
-  <!-- LOGIN SECTION -->
   <div class="panel" id="loginPanel">
     <div style="text-align:center; margin-bottom:20px;">
       <div class="status-badge offline"><div class="status-dot"></div> OFFLINE</div>
     </div>
-
-    <div class="tabs">
-      <button class="tab active" data-mode="bot" onclick="switchTab('bot')">🤖 Bot Token</button>
-      <button class="tab" data-mode="user" onclick="switchTab('user')">👤 User Token</button>
-    </div>
-
-    <input type="hidden" id="tokenMode" value="bot">
-    
-    <label>Token</label>
-    <input id="token" type="password" placeholder="Nhập token vào đây...">
-    
+    <label>Token Bot</label>
+    <input id="token" type="password" placeholder="Nhập Bot Token vào đây...">
     <button id="btnLogin">KẾT NỐI NGAY</button>
     <div id="loginStat" style="font-size:12px; color:var(--acc); text-align:center; margin-top:12px; font-weight:bold;"></div>
   </div>
 
-  <!-- CONTROL SECTION -->
   <div class="panel hidden" id="controlPanel">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:10px;">
       <div class="status-badge"><div class="status-dot"></div> ONLINE</div>
       <div style="font-size:13px;">
-        <span style="color:var(--dim)">User:</span> <b id="botTag" style="color:#fff"></b>
-        <span id="botMode" style="color:var(--dim); font-size:11px; margin-left:4px;"></span>
+        <span style="color:var(--dim)">Bot:</span> <b id="botTag" style="color:#fff"></b>
       </div>
     </div>
     
@@ -158,7 +82,6 @@
     </div>
   </div>
 
-  <!-- CONSOLE SECTION -->
   <div class="panel console-wrapper">
     <div class="console-header">
       <span>SYSTEM LOGS</span>
@@ -176,50 +99,28 @@ const loginPanel = $('loginPanel');
 const controlPanel = $('controlPanel');
 const logBox = $('logBox');
 
-// CHUYỂN TAB
-function switchTab(mode) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.querySelector(`.tab[data-mode="${mode}"]`).classList.add('active');
-  $('tokenMode').value = mode;
-  tokenInput.placeholder = mode === 'bot' ? 'MTA... (Bot Token)' : 'Nhập User Token (Selfbot)';
-}
-
-// CẬP NHẬT GIAO DIỆN ONLINE/OFFLINE
-function setOnlineUI(isOnline, user = '', clientId = '', mode = 'bot') {
+function setOnlineUI(isOnline, user = '', clientId = '') {
   if (isOnline) {
     loginPanel.classList.add('hidden');
     controlPanel.classList.remove('hidden');
     $('botTag').textContent = user;
-    $('botMode').textContent = `(${mode.toUpperCase()})`;
-    
-    if (mode === 'bot') {
-      $('btnAdd').style.display = 'block';
-      $('btnAdd').href = `https://discord.com/oauth2/authorize?client_id=${clientId}&permissions=8&scope=bot%20applications.commands`;
-    } else {
-      $('btnAdd').style.display = 'none';
-    }
-    
+    $('btnAdd').href = `https://discord.com/oauth2/authorize?client_id=${clientId}&permissions=8&scope=bot%20applications.commands`;
     localStorage.setItem('nuke_token', tokenInput.value);
-    localStorage.setItem('nuke_mode', mode);
   } else {
     loginPanel.classList.remove('hidden');
     controlPanel.classList.add('hidden');
     $('botTag').textContent = '';
-    $('botMode').textContent = '';
     $('btnAdd').href = '#';
     tokenInput.value = '';
   }
 }
 
-// RENDER LOGS
 let lastLogLength = 0;
 function renderLogs(logs) {
   if (logs.length === lastLogLength) return;
   lastLogLength = logs.length;
-  
   $('logCount').textContent = `${logs.length} dòng`;
   logBox.innerHTML = '';
-  
   logs.forEach(l => {
     const div = document.createElement('div');
     div.className = 'log-item';
@@ -229,7 +130,6 @@ function renderLogs(logs) {
   logBox.scrollTop = logBox.scrollHeight;
 }
 
-// POLL LOG 1S
 setInterval(async () => {
   try {
     const r = await fetch('/api/logs');
@@ -238,29 +138,24 @@ setInterval(async () => {
   } catch (e) {}
 }, 1000);
 
-// CHECK STATUS
 async function checkStatus() {
   try {
     const r = await fetch('/api/status');
     const j = await r.json();
     if (j.online) {
-      setOnlineUI(true, j.user, j.clientId, j.mode);
+      setOnlineUI(true, j.user, j.clientId);
     } else {
       const savedToken = localStorage.getItem('nuke_token');
-      const savedMode = localStorage.getItem('nuke_mode');
       if (savedToken) tokenInput.value = savedToken;
-      if (savedMode) switchTab(savedMode);
       setOnlineUI(false);
     }
   } catch (e) {}
 }
 checkStatus();
 
-// ACTION LOGIN
 $('btnLogin').onclick = async () => {
   const btn = $('btnLogin');
   const token = tokenInput.value.trim();
-  const mode = $('tokenMode').value;
   const stat = $('loginStat');
   
   if (!token) {
@@ -276,12 +171,11 @@ $('btnLogin').onclick = async () => {
     const r = await fetch('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, mode })
+      body: JSON.stringify({ token })
     });
     const j = await r.json();
-    
     if (!j.ok) throw new Error(j.error || 'Lỗi kết nối');
-    setOnlineUI(true, j.user, j.clientId, mode);
+    setOnlineUI(true, j.user, j.clientId);
   } catch (e) {
     stat.textContent = 'Lỗi: ' + e.message;
   } finally {
@@ -290,7 +184,6 @@ $('btnLogin').onclick = async () => {
   }
 };
 
-// ACTION LOGOUT
 $('btnLogout').onclick = async () => {
   const btn = $('btnLogout');
   btn.disabled = true;
@@ -306,7 +199,6 @@ $('btnLogout').onclick = async () => {
   }
 };
 
-// ACTION CHANGE TOKEN
 $('btnChangeToken').onclick = () => {
   loginPanel.classList.remove('hidden');
   controlPanel.classList.add('hidden');
