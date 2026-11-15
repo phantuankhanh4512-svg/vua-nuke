@@ -5,209 +5,187 @@
 <title>nuke panel</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-  :root { --acc:#f44; --bg:#0a0a0a; --pnl:#111; --brd:#222; --txt:#ddd; --dim:#888; }
+  :root { --acc:#f44; --bg:#0a0a0a; --pnl:#111; --brd:#222; --txt:#ddd; --dim:#888; --grn:#4c4; --ylw:#fa0; }
   * { box-sizing:border-box; }
   body { background:var(--bg); color:var(--txt); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; margin:0; padding:24px; }
-  h1 { color:var(--acc); font-size:16px; letter-spacing:4px; margin:0 0 20px; }
+  h1 { color:var(--acc); font-size:16px; letter-spacing:4px; margin:0 0 20px; text-align:center; }
   .wrap { max-width:600px; margin:0 auto; }
   .panel { background:var(--pnl); border:1px solid var(--brd); padding:16px; margin-bottom:16px; }
   label { display:block; margin:10px 0 4px; font-size:11px; color:var(--dim); letter-spacing:1px; text-transform:uppercase; }
-  input, select, textarea { width:100%; background:#0d0d0d; border:1px solid #2a2a2a; color:var(--txt); padding:8px; font-family:inherit; font-size:13px; }
-  input:focus, select:focus, textarea:focus { outline:none; border-color:var(--acc); }
-  textarea { resize:vertical; min-height:80px; }
-  .row { display:flex; gap:8px; }
-  .row > * { flex:1; }
-  .chk { display:flex; align-items:center; gap:8px; margin-top:12px; font-size:12px; }
-  .chk input { width:auto; }
-  button { margin-top:18px; width:100%; background:var(--acc); color:#000; border:0; padding:14px; font-weight:bold; letter-spacing:3px; cursor:pointer; font-family:inherit; font-size:13px; }
+  input { width:100%; background:#0d0d0d; border:1px solid #2a2a2a; color:var(--txt); padding:10px; font-family:inherit; font-size:13px; }
+  input:focus { outline:none; border-color:var(--acc); }
+  button { width:100%; background:var(--acc); color:#000; border:0; padding:14px; font-weight:bold; letter-spacing:2px; cursor:pointer; font-family:inherit; font-size:13px; margin-top:12px; }
   button:hover { background:#f66; }
   button:disabled { background:#333; color:#666; cursor:not-allowed; }
-  .btn-save { background:#4c4; margin-top:12px; }
-  .btn-save:hover { background:#5d5; }
-  .stat { font-size:11px; color:var(--dim); margin-top:8px; text-align:center; }
+  .btn-outline { background:transparent; border:1px solid var(--acc); color:var(--acc); }
+  .btn-outline:hover { background:rgba(255,68,68,0.1); }
+  .btn-add { background:#5865F2; color:#fff; text-decoration:none; display:block; text-align:center; margin-top:12px; padding:12px; font-weight:bold; border-radius:4px; }
+  .btn-add:hover { background:#4752C4; }
+  .btn-off { background:#333; color:#fff; }
+  .btn-off:hover { background:#444; }
+  
+  #logBox { background:#080808; border:1px solid var(--brd); padding:12px; height:300px; overflow-y:auto; font-size:12px; line-height:1.5; }
+  .log-item { margin-bottom:4px; }
+  .log-time { color:#666; margin-right:8px; }
+  .log-info { color:#ddd; }
+  .log-success { color:var(--grn); }
+  .log-warn { color:var(--ylw); }
+  .log-error { color:var(--acc); }
+  
+  .hidden { display:none !important; }
+  .flex-row { display:flex; gap:8px; }
+  .flex-row > * { flex:1; }
 </style>
 </head>
 <body>
 <h1>// NUKE BOT</h1>
 <div class="wrap">
   
-  <div class="panel">
-    <label>Token Bot</label>
+  <!-- TRẠNG THÁI BAN ĐẦU: CHỈ CÓ TOKEN -->
+  <div class="panel" id="loginPanel">
+    <label>Nhập Token Bot</label>
     <input id="token" type="password" placeholder="MTA...">
-    <button id="go">BẬT BOT / TẢI CẤU HÌNH</button>
-    <div class="stat" id="stat">chưa kết nối</div>
+    <button id="btnLogin">BẬT BOT</button>
+    <div id="loginStat" style="font-size:12px; color:var(--acc); text-align:center; margin-top:8px;"></div>
   </div>
 
-  <div class="panel">
-    <label>Cấu hình Nuke (Lưu riêng cho bot này)</label>
+  <!-- KHI ĐÃ ONLINE -->
+  <div class="panel hidden" id="controlPanel">
+    <div style="text-align:center; font-size:13px; margin-bottom:12px;">
+      Trạng thái: <b id="botTag" style="color:var(--grn)"></b>
+    </div>
     
-    <label>Tên kênh tạo ra</label>
-    <input id="channelName">
-    
-    <label>Rename Guild</label>
-    <input id="renameName">
-    
-    <div class="row">
-      <div>
-        <label>Số kênh tạo</label>
-        <input id="channelCount" type="number">
-      </div>
-      <div>
-        <label>Số tin/kênh</label>
-        <input id="msgCount" type="number">
-      </div>
+    <div class="flex-row">
+      <a href="#" id="btnAdd" target="_blank" class="btn-add">ADD BOT VÀO SERVER</a>
+      <button id="btnLogout" class="btn-off">TẮT BOT</button>
     </div>
 
-    <label>Nội dung tin nhắn (Bot gửi)</label>
-    <textarea id="msgContent"></textarea>
-    
-    <div class="chk">
-      <input type="checkbox" id="pingEveryone">
-      <span>ping @everyone</span>
-    </div>
-
-    <button id="save" class="btn-save">LƯU CẤU HÌNH</button>
-    <div class="stat" id="saveStat"></div>
+    <p style="font-size:12px; color:#888; margin-top:16px; text-align:center; line-height:1.6;">
+      Hướng dẫn: Thêm bot vào server -> Gõ <b style="color:var(--txt)">!nuke</b> vào bất kỳ kênh chat.
+    </p>
   </div>
 
-  <div class="panel" style="font-size:12px; color:#888; line-height:1.6;">
-    Hướng dẫn:<br>
-    1. Nhập token Bot -> Bật Bot (tự động tải cấu hình).<br>
-    2. Sửa cấu hình -> Lưu.<br>
-    3. Thêm bot vào server muốn nuke.<br>
-    4. Gõ <b>!nuke</b> ở bất kỳ kênh chat nào.
+  <!-- LOG CONSOLE -->
+  <div class="panel" style="padding:0; border:none;">
+    <div id="logBox"></div>
   </div>
+
 </div>
 
 <script>
 const $ = id => document.getElementById(id);
-const statEl = $('stat');
-const saveStat = $('saveStat');
+const tokenInput = $('token');
+const loginPanel = $('loginPanel');
+const controlPanel = $('controlPanel');
+const logBox = $('logBox');
 
-// Tự động load config mặc định khi mở trang
-window.addEventListener('DOMContentLoaded', async () => {
-  try {
-    const r = await fetch('/api/settings/get', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: 'default' })
-    });
-    const cfg = await r.json();
-    $('channelName').value = cfg.channelName || '';
-    $('renameName').value = cfg.renameName || '';
-    $('channelCount').value = cfg.channelCount || 100;
-    $('msgContent').value = cfg.msgContent || '';
-    $('msgCount').value = cfg.msgCount || 1;
-    $('pingEveryone').checked = !!cfg.pingEveryone;
-  } catch (e) {
-    console.error('Không tải được default config:', e);
-  }
-});
-
-$('go').onclick = async () => {
-  const btn = $('go');
-  btn.disabled = true;
-  statEl.textContent = 'đang kết nối...';
-  statEl.style.color = '#888';
-  
-  const token = $('token').value.trim();
-  if (!token) {
-    statEl.textContent = 'vui lòng nhập token';
-    statEl.style.color = '#f44';
-    btn.disabled = false;
-    return;
-  }
-
-  try {
-    const r = await fetch('/api/bot-login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token })
-    });
+// --- QUẢN LÝ UI ---
+function setOnlineUI(isOnline, user = '', clientId = '') {
+  if (isOnline) {
+    loginPanel.classList.add('hidden');
+    controlPanel.classList.remove('hidden');
+    $('botTag').textContent = user;
     
-    let j;
-    try {
-      j = await r.json();
-    } catch (err) {
-      throw new Error('Server trả về lỗi không xác định (không phải JSON)');
+    // Tạo link add bot
+    const permissions = 8; // Admin
+    const scope = 'bot%20applications.commands';
+    $('btnAdd').href = `https://discord.com/oauth2/authorize?client_id=${clientId}&permissions=${permissions}&scope=${scope}`;
+    
+    // Lưu token để lần sau F5 còn biết
+    localStorage.setItem('nuke_token', tokenInput.value);
+  } else {
+    loginPanel.classList.remove('hidden');
+    controlPanel.classList.add('hidden');
+    $('botTag').textContent = '';
+    $('btnAdd').href = '#';
+    localStorage.removeItem('nuke_token');
+    tokenInput.value = '';
+  }
+}
+
+function renderLogs(logs) {
+  logBox.innerHTML = '';
+  logs.forEach(l => {
+    const div = document.createElement('div');
+    div.className = 'log-item';
+    div.innerHTML = `<span class="log-time">[${l.time}]</span><span class="log-${l.type}">${l.msg}</span>`;
+    logBox.appendChild(div);
+  });
+  logBox.scrollTop = logBox.scrollHeight;
+}
+
+// --- POLL LOG ---
+setInterval(async () => {
+  try {
+    const r = await fetch('/api/logs');
+    const logs = await r.json();
+    renderLogs(logs);
+  } catch (e) {}
+}, 1500);
+
+// --- CHECK STATUS KHI MỞ TRANG ---
+async function checkStatus() {
+  try {
+    const r = await fetch('/api/status');
+    const j = await r.json();
+    if (j.online) {
+      setOnlineUI(true, j.user, j.clientId);
+    } else {
+      const savedToken = localStorage.getItem('nuke_token');
+      if (savedToken) tokenInput.value = savedToken;
+      setOnlineUI(false);
     }
+  } catch (e) {}
+}
+checkStatus();
 
-    if (!j.ok) throw new Error(j.error || 'lỗi kết nối');
-    
-    statEl.textContent = 'online: ' + j.user;
-    statEl.style.color = '#4c4';
-    
-    // Load config của token này
-    const rCfg = await fetch('/api/settings/get', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token })
-    });
-    const cfg = await rCfg.json();
-    
-    $('channelName').value = cfg.channelName || '';
-    $('renameName').value = cfg.renameName || '';
-    $('channelCount').value = cfg.channelCount || 100;
-    $('msgContent').value = cfg.msgContent || '';
-    $('msgCount').value = cfg.msgCount || 1;
-    $('pingEveryone').checked = !!cfg.pingEveryone;
-
-    localStorage.setItem('nuke_active_token', token);
-    $('token').value = '';
-  } catch (e) {
-    statEl.textContent = 'lỗi: ' + e.message;
-    statEl.style.color = '#f44';
-  } finally {
-    btn.disabled = false;
-  }
-};
-
-$('save').onclick = async () => {
-  const token = localStorage.getItem('nuke_active_token');
+// --- ACTION: BẬT BOT ---
+$('btnLogin').onclick = async () => {
+  const btn = $('btnLogin');
+  const token = tokenInput.value.trim();
+  const stat = $('loginStat');
+  
   if (!token) {
-    saveStat.textContent = 'chưa bật bot!';
-    saveStat.style.color = '#f44';
+    stat.textContent = 'Vui lòng nhập token!';
     return;
   }
 
-  const btn = $('save');
   btn.disabled = true;
-  saveStat.textContent = 'đang lưu...';
-  saveStat.style.color = '#888';
-  
+  btn.textContent = 'ĐANG KẾT NỐI...';
+  stat.textContent = '';
+
   try {
-    const payload = {
-      token,
-      channelName: $('channelName').value.trim(),
-      renameName: $('renameName').value.trim(),
-      channelCount: parseInt($('channelCount').value, 10) || 100,
-      msgContent: $('msgContent').value,
-      msgCount: parseInt($('msgCount').value, 10) || 1,
-      pingEveryone: $('pingEveryone').checked
-    };
-    
-    const r = await fetch('/api/settings/save', {
+    const r = await fetch('/api/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({ token })
     });
     const j = await r.json();
-    if (!j.ok) throw new Error(j.error);
     
-    saveStat.textContent = 'đã lưu cho bot này!';
-    saveStat.style.color = '#4c4';
-    setTimeout(() => saveStat.textContent = '', 2000);
+    if (!j.ok) throw new Error(j.error || 'Lỗi kết nối');
+    
+    setOnlineUI(true, j.user, j.clientId);
   } catch (e) {
-    saveStat.textContent = 'lỗi: ' + e.message;
-    saveStat.style.color = '#f44';
+    stat.textContent = 'Lỗi: ' + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'BẬT BOT';
+  }
+};
+
+// --- ACTION: TẮT BOT ---
+$('btnLogout').onclick = async () => {
+  const btn = $('btnLogout');
+  btn.disabled = true;
+  try {
+    await fetch('/api/logout', { method: 'POST' });
+    setOnlineUI(false);
+  } catch (e) {
+    alert('Lỗi tắt bot');
   } finally {
     btn.disabled = false;
   }
 };
-
-// Tự động điền lại token cũ nếu có
-const oldToken = localStorage.getItem('nuke_active_token');
-if (oldToken) $('token').value = oldToken;
 </script>
 </body>
 </html>
