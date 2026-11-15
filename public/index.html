@@ -34,47 +34,46 @@
   <div class="panel">
     <label>Token Bot</label>
     <input id="token" type="password" placeholder="MTA...">
-    <button id="go">BẬT BOT</button>
+    <button id="go">BẬT BOT / TẢI CẤU HÌNH</button>
     <div class="stat" id="stat">chưa kết nối</div>
   </div>
 
   <div class="panel">
-    <label>Cấu hình Nuke (Lưu trên máy này)</label>
+    <label>Cấu hình Nuke (Lưu riêng cho bot này)</label>
     
     <label>Tên kênh tạo ra</label>
-    <input id="channelName" value="NUKE BY PHTUANKHANH">
+    <input id="channelName">
     
     <label>Rename Guild</label>
-    <input id="renameName" value="NUKE BY PTK">
+    <input id="renameName">
     
     <div class="row">
       <div>
         <label>Số kênh tạo</label>
-        <input id="channelCount" type="number" value="100">
+        <input id="channelCount" type="number">
       </div>
       <div>
         <label>Số tin/kênh</label>
-        <input id="msgCount" type="number" value="1">
+        <input id="msgCount" type="number">
       </div>
     </div>
 
     <label>Nội dung tin nhắn (Bot gửi)</label>
-    <textarea id="msgContent"># NUKED
-> @everyone cút hết</textarea>
+    <textarea id="msgContent"></textarea>
     
     <div class="chk">
-      <input type="checkbox" id="pingEveryone" checked>
+      <input type="checkbox" id="pingEveryone">
       <span>ping @everyone</span>
     </div>
 
-    <button id="save" class="btn-save">LƯU VÀO MÁY NÀY</button>
+    <button id="save" class="btn-save">LƯU CẤU HÌNH</button>
     <div class="stat" id="saveStat"></div>
   </div>
 
   <div class="panel" style="font-size:12px; color:#888; line-height:1.6;">
     Hướng dẫn:<br>
-    1. Nhập token Bot -> Bật Bot.<br>
-    2. Lưu cấu hình (chỉ lưu trên máy này).<br>
+    1. Nhập token Bot -> Bật Bot (tự động tải cấu hình).<br>
+    2. Sửa cấu hình -> Lưu.<br>
     3. Thêm bot vào server muốn nuke.<br>
     4. Gõ <b>!nuke</b> ở bất kỳ kênh chat nào.
   </div>
@@ -85,21 +84,25 @@ const $ = id => document.getElementById(id);
 const statEl = $('stat');
 const saveStat = $('saveStat');
 
-// Tự động load config từ localStorage khi mở trang
-(function loadFromLocal() {
-  const saved = localStorage.getItem('nuke_config');
-  if (saved) {
-    try {
-      const cfg = JSON.parse(saved);
-      $('channelName').value = cfg.channelName || '';
-      $('renameName').value = cfg.renameName || '';
-      $('channelCount').value = cfg.channelCount || 100;
-      $('msgContent').value = cfg.msgContent || '';
-      $('msgCount').value = cfg.msgCount || 1;
-      $('pingEveryone').checked = !!cfg.pingEveryone;
-    } catch (e) {}
+// Tự động load config mặc định từ server khi mở trang
+window.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const r = await fetch('/api/settings/get', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: 'default' }) // Lấy default
+    });
+    const cfg = await r.json();
+    $('channelName').value = cfg.channelName || '';
+    $('renameName').value = cfg.renameName || '';
+    $('channelCount').value = cfg.channelCount || 100;
+    $('msgContent').value = cfg.msgContent || '';
+    $('msgCount').value = cfg.msgCount || 1;
+    $('pingEveryone').checked = !!cfg.pingEveryone;
+  } catch (e) {
+    console.error('Không tải được default config:', e);
   }
-})();
+});
 
 $('go').onclick = async () => {
   const btn = $('go');
@@ -107,17 +110,43 @@ $('go').onclick = async () => {
   statEl.textContent = 'đang kết nối...';
   statEl.style.color = '#888';
   
+  const token = $('token').value.trim();
+  if (!token) {
+    statEl.textContent = 'vui lòng nhập token';
+    statEl.style.color = '#f44';
+    btn.disabled = false;
+    return;
+  }
+
   try {
     const r = await fetch('/api/bot-login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: $('token').value.trim() })
+      body: JSON.stringify({ token })
     });
     const j = await r.json();
     if (!j.ok) throw new Error(j.error || 'lỗi kết nối');
     
     statEl.textContent = 'online: ' + j.user;
     statEl.style.color = '#4c4';
+    
+    // Load config của token này
+    const rCfg = await fetch('/api/settings/get', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token })
+    });
+    const cfg = await rCfg.json();
+    
+    $('channelName').value = cfg.channelName || '';
+    $('renameName').value = cfg.renameName || '';
+    $('channelCount').value = cfg.channelCount || 100;
+    $('msgContent').value = cfg.msgContent || '';
+    $('msgCount').value = cfg.msgCount || 1;
+    $('pingEveryone').checked = !!cfg.pingEveryone;
+
+    // Lưu token hiện tại vào localStorage để lần sau mở lên ko cần nhập lại
+    localStorage.setItem('nuke_active_token', token);
     $('token').value = '';
   } catch (e) {
     statEl.textContent = 'lỗi: ' + e.message;
@@ -128,26 +157,30 @@ $('go').onclick = async () => {
 };
 
 $('save').onclick = async () => {
+  const token = localStorage.getItem('nuke_active_token');
+  if (!token) {
+    saveStat.textContent = 'chưa bật bot!';
+    saveStat.style.color = '#f44';
+    return;
+  }
+
   const btn = $('save');
   btn.disabled = true;
   saveStat.textContent = 'đang lưu...';
   saveStat.style.color = '#888';
   
-  const payload = {
-    channelName: $('channelName').value.trim(),
-    renameName: $('renameName').value.trim(),
-    channelCount: parseInt($('channelCount').value, 10),
-    msgContent: $('msgContent').value,
-    msgCount: parseInt($('msgCount').value, 10),
-    pingEveryone: $('pingEveryone').checked
-  };
-
-  // Lưu vào máy (localStorage)
-  localStorage.setItem('nuke_config', JSON.stringify(payload));
-
-  // Gửi lên server để bot nuke theo setting này
   try {
-    const r = await fetch('/api/settings', {
+    const payload = {
+      token,
+      channelName: $('channelName').value.trim(),
+      renameName: $('renameName').value.trim(),
+      channelCount: parseInt($('channelCount').value, 10),
+      msgContent: $('msgContent').value,
+      msgCount: parseInt($('msgCount').value, 10),
+      pingEveryone: $('pingEveryone').checked
+    };
+    
+    const r = await fetch('/api/settings/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
@@ -155,7 +188,7 @@ $('save').onclick = async () => {
     const j = await r.json();
     if (!j.ok) throw new Error(j.error);
     
-    saveStat.textContent = 'đã lưu vào máy!';
+    saveStat.textContent = 'đã lưu cho bot này!';
     saveStat.style.color = '#4c4';
     setTimeout(() => saveStat.textContent = '', 2000);
   } catch (e) {
@@ -165,6 +198,12 @@ $('save').onclick = async () => {
     btn.disabled = false;
   }
 };
+
+// Nếu có token cũ đã bật, tự động gọi login
+const oldToken = localStorage.getItem('nuke_active_token');
+if (oldToken) {
+    $('token').value = oldToken;
+}
 </script>
 </body>
 </html>
