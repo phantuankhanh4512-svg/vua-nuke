@@ -9,140 +9,71 @@
   * { box-sizing:border-box; }
   body { background:var(--bg); color:var(--txt); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; margin:0; padding:24px; }
   h1 { color:var(--acc); font-size:16px; letter-spacing:4px; margin:0 0 20px; }
-  .wrap { display:grid; grid-template-columns: 380px 1fr; gap:16px; max-width:1200px; margin:0 auto; }
-  @media (max-width:900px) { .wrap { grid-template-columns:1fr; } }
+  .wrap { max-width:600px; margin:0 auto; }
   .panel { background:var(--pnl); border:1px solid var(--brd); padding:16px; }
   label { display:block; margin:10px 0 4px; font-size:11px; color:var(--dim); letter-spacing:1px; text-transform:uppercase; }
   input, select { width:100%; background:#0d0d0d; border:1px solid #2a2a2a; color:var(--txt); padding:8px; font-family:inherit; font-size:13px; }
   input:focus, select:focus { outline:none; border-color:var(--acc); }
-  .row { display:flex; gap:8px; }
-  .row > * { flex:1; }
-  .chk { display:flex; align-items:center; gap:8px; margin-top:12px; font-size:12px; }
-  .chk input { width:auto; }
   button { margin-top:18px; width:100%; background:var(--acc); color:#000; border:0; padding:14px; font-weight:bold; letter-spacing:3px; cursor:pointer; font-family:inherit; font-size:13px; }
   button:hover { background:#f66; }
   button:disabled { background:#333; color:#666; cursor:not-allowed; }
-  #log { background:#080808; border:1px solid var(--brd); padding:12px; height:70vh; overflow:auto; font-size:12px; white-space:pre-wrap; line-height:1.5; }
-  #log .ok { color:#4c4; }
-  #log .err { color:var(--acc); }
-  #log .dim { color:var(--dim); }
   .stat { font-size:11px; color:var(--dim); margin-top:8px; }
-  .clear { margin-top:8px; background:#222; color:#ccc; font-size:11px; padding:8px; letter-spacing:1px; }
 </style>
 </head>
 <body>
-<h1>// NUKE PANEL</h1>
+<h1>// NUKE BOT</h1>
 <div class="wrap">
   <div class="panel">
-    <label>token (user hoặc bot)</label>
-    <input id="token" type="password" autocomplete="off" placeholder="MTA... / user token">
-    <label>loại token</label>
-    <select id="isBot">
-      <option value="1">bot</option>
-      <option value="0">user (selfbot)</option>
-    </select>
-    <label>guild id</label>
-    <input id="guildId" placeholder="123456789012345678">
-    <label>proxy (tùy chọn)</label>
-    <input id="proxy" placeholder="http://user:pass@ip:port (trống = không proxy)">
-    <div class="row">
-      <div><label>số kênh tạo</label><input id="channelCount" type="number" value="100" min="1" max="200"></div>
-      <div><label>số tin / webhook</label><input id="webhookMsgCount" type="number" value="1" min="0" max="20"></div>
-    </div>
-    <label>tên kênh</label>
-    <input id="channelName" value="NUKE BY PHTUANKHANH">
-    <label>rename guild</label>
-    <input id="renameName" value="NUKE BY PTK">
-    <div class="chk">
-      <input type="checkbox" id="pingEveryone" checked>
-      <span>ping @everyone qua webhook</span>
-    </div>
-    <button id="go">NUKE</button>
-    <button id="clear" class="clear">xoá cấu hình đã lưu</button>
+    <label>token (bot)</label>
+    <input id="token" type="password" autocomplete="off" placeholder="MTA... / bot token">
+    
+    <button id="go">BẬT BOT</button>
     <div class="stat" id="stat">sẵn sàng</div>
-  </div>
-  <div class="panel">
-    <div id="log">// output</div>
+    
+    <p style="font-size:12px;color:#888;margin-top:20px;line-height:1.6;">
+      Hướng dẫn:<br>
+      1. Bật bot bằng token.<br>
+      2. Thêm bot vào server muốn nuke.<br>
+      3. Gõ <b>!nuke</b> vào bất kỳ kênh chat nào trong server đó.<br>
+      4. Bot tự động nuke server đó ngay lập tức.
+    </p>
   </div>
 </div>
+
 <script>
 const $ = id => document.getElementById(id);
-const logEl = $('log');
 const statEl = $('stat');
-function addLine(s, cls='') {
-  const div = document.createElement('div');
-  if (cls) div.className = cls;
-  div.textContent = s;
-  logEl.appendChild(div);
-  logEl.scrollTop = logEl.scrollHeight;
-}
-const FIELDS = ['token', 'isBot', 'guildId', 'proxy', 'channelCount', 'channelName', 'renameName', 'webhookMsgCount', 'pingEveryone'];
-function saveForm() {
-  const data = {};
-  for (const f of FIELDS) { const el = $(f); if (!el) continue; data[f] = el.type === 'checkbox' ? el.checked : el.value; }
-  localStorage.setItem('nuke_cfg', JSON.stringify(data));
-}
-function loadForm() {
-  let data = null;
-  try { data = JSON.parse(localStorage.getItem('nuke_cfg') || 'null'); } catch {}
-  if (!data) return;
-  for (const f of FIELDS) {
-    const el = $(f);
-    if (!el || !(f in data)) continue;
-    if (el.type === 'checkbox') el.checked = !!data[f]; else el.value = data[f];
-  }
-}
-loadForm();
-for (const f of FIELDS) { const el = $(f); if (!el) continue; el.addEventListener('change', saveForm); el.addEventListener('input', saveForm); }
-$('clear').onclick = () => { localStorage.removeItem('nuke_cfg'); addLine('// đã xoá cấu hình lưu', 'dim'); };
+
 $('go').onclick = async () => {
   const btn = $('go');
   btn.disabled = true;
-  logEl.innerHTML = '';
-  statEl.textContent = 'đang chạy...';
-  const payload = {
-    token: $('token').value.trim(),
-    isBot: $('isBot').value === '1',
-    guildId: $('guildId').value.trim(),
-    proxy: $('proxy').value.trim(),
-    channelCount: parseInt($('channelCount').value, 10) || 100,
-    channelName: $('channelName').value.trim() || 'NUKE BY PHTUANKHANH',
-    renameName: $('renameName').value.trim() || 'NUKE BY PTK',
-    webhookMsgCount: parseInt($('webhookMsgCount').value, 10) || 1,
-    pingEveryone: $('pingEveryone').checked,
-  };
-  if (!payload.token || !payload.guildId) {
-    addLine('! token và guild id bắt buộc', 'err');
-    btn.disabled = false; statEl.textContent = 'sẵn sàng';
+  statEl.textContent = 'đang kết nối...';
+  const token = $('token').value.trim();
+  
+  if (!token) {
+    statEl.textContent = 'lỗi: cần token';
+    btn.disabled = false;
     return;
   }
+
   try {
-    const r = await fetch('/api/nuke', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-    if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || ('http ' + r.status)); }
-    const reader = r.body.getReader();
-    const dec = new TextDecoder();
-    let buf = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += dec.decode(value, { stream: true });
-      let i;
-      while ((i = buf.indexOf('\n')) >= 0) {
-        const line = buf.slice(0, i); buf = buf.slice(i + 1);
-        if (!line.trim()) continue;
-        let j;
-        try { j = JSON.parse(line); } catch { continue; }
-        if (j.log) {
-          const cls = j.log.includes('DONE') ? 'ok' : j.log.includes('fail') || j.log.includes('FATAL') ? 'err' : '';
-          addLine(j.log, cls);
-        }
-      }
-    }
-    statEl.textContent = 'xong';
+    const r = await fetch('/api/bot-login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token })
+    });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'lỗi kết nối');
+    
+    statEl.textContent = 'online: ' + j.user;
+    statEl.style.color = '#4c4';
+    $('token').value = '';
   } catch (e) {
-    addLine('! ' + e.message, 'err');
-    statEl.textContent = 'lỗi';
-  } finally { btn.disabled = false; }
+    statEl.textContent = 'lỗi: ' + e.message;
+    statEl.style.color = '#f44';
+  } finally {
+    btn.disabled = false;
+  }
 };
 </script>
 </body>
