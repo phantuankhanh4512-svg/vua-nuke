@@ -10,57 +10,101 @@
   body { background:var(--bg); color:var(--txt); font-family:ui-monospace,SFMono-Regular,Menlo,monospace; margin:0; padding:24px; }
   h1 { color:var(--acc); font-size:16px; letter-spacing:4px; margin:0 0 20px; }
   .wrap { max-width:600px; margin:0 auto; }
-  .panel { background:var(--pnl); border:1px solid var(--brd); padding:16px; }
+  .panel { background:var(--pnl); border:1px solid var(--brd); padding:16px; margin-bottom:16px; }
   label { display:block; margin:10px 0 4px; font-size:11px; color:var(--dim); letter-spacing:1px; text-transform:uppercase; }
-  input, select { width:100%; background:#0d0d0d; border:1px solid #2a2a2a; color:var(--txt); padding:8px; font-family:inherit; font-size:13px; }
-  input:focus, select:focus { outline:none; border-color:var(--acc); }
+  input, select, textarea { width:100%; background:#0d0d0d; border:1px solid #2a2a2a; color:var(--txt); padding:8px; font-family:inherit; font-size:13px; }
+  input:focus, select:focus, textarea:focus { outline:none; border-color:var(--acc); }
+  textarea { resize:vertical; min-height:80px; }
+  .row { display:flex; gap:8px; }
+  .row > * { flex:1; }
+  .chk { display:flex; align-items:center; gap:8px; margin-top:12px; font-size:12px; }
+  .chk input { width:auto; }
   button { margin-top:18px; width:100%; background:var(--acc); color:#000; border:0; padding:14px; font-weight:bold; letter-spacing:3px; cursor:pointer; font-family:inherit; font-size:13px; }
   button:hover { background:#f66; }
   button:disabled { background:#333; color:#666; cursor:not-allowed; }
-  .stat { font-size:11px; color:var(--dim); margin-top:8px; }
+  .btn-save { background:#4c4; margin-top:12px; }
+  .btn-save:hover { background:#5d5; }
+  .stat { font-size:11px; color:var(--dim); margin-top:8px; text-align:center; }
 </style>
 </head>
 <body>
 <h1>// NUKE BOT</h1>
 <div class="wrap">
+  
   <div class="panel">
-    <label>token (bot)</label>
-    <input id="token" type="password" autocomplete="off" placeholder="MTA... / bot token">
-    
+    <label>Token Bot</label>
+    <input id="token" type="password" placeholder="MTA...">
     <button id="go">BẬT BOT</button>
-    <div class="stat" id="stat">sẵn sàng</div>
+    <div class="stat" id="stat">chưa kết nối</div>
+  </div>
+
+  <div class="panel">
+    <label>Cấu hình Nuke</label>
     
-    <p style="font-size:12px;color:#888;margin-top:20px;line-height:1.6;">
-      Hướng dẫn:<br>
-      1. Bật bot bằng token.<br>
-      2. Thêm bot vào server muốn nuke.<br>
-      3. Gõ <b>!nuke</b> vào bất kỳ kênh chat nào trong server đó.<br>
-      4. Bot tự động nuke server đó ngay lập tức.
-    </p>
+    <label>Tên kênh tạo ra</label>
+    <input id="channelName" value="NUKE BY PHTUANKHANH">
+    
+    <label>Rename Guild</label>
+    <input id="renameName" value="NUKE BY PTK">
+    
+    <div class="row">
+      <div>
+        <label>Số kênh tạo</label>
+        <input id="channelCount" type="number" value="100">
+      </div>
+      <div>
+        <label>Số tin/kênh</label>
+        <input id="msgCount" type="number" value="1">
+      </div>
+    </div>
+
+    <label>Nội dung tin nhắn (Bot gửi)</label>
+    <textarea id="msgContent"># NUKED
+> @everyone cút hết</textarea>
+    
+    <div class="chk">
+      <input type="checkbox" id="pingEveryone" checked>
+      <span>ping @everyone</span>
+    </div>
+
+    <button id="save" class="btn-save">LƯU CẤU HÌNH</button>
+    <div class="stat" id="saveStat"></div>
+  </div>
+
+  <div class="panel" style="font-size:12px; color:#888; line-height:1.6;">
+    Hướng dẫn:<br>
+    1. Nhập token Bot -> Bật Bot.<br>
+    2. Lưu cấu hình.<br>
+    3. Thêm bot vào server muốn nuke.<br>
+    4. Gõ <b>!nuke</b> ở bất kỳ kênh chat nào.
   </div>
 </div>
 
 <script>
 const $ = id => document.getElementById(id);
 const statEl = $('stat');
+const saveStat = $('saveStat');
+
+fetch('/api/settings').then(r => r.json()).then(cfg => {
+  $('channelName').value = cfg.channelName;
+  $('renameName').value = cfg.renameName;
+  $('channelCount').value = cfg.channelCount;
+  $('msgContent').value = cfg.msgContent;
+  $('msgCount').value = cfg.msgCount;
+  $('pingEveryone').checked = cfg.pingEveryone;
+});
 
 $('go').onclick = async () => {
   const btn = $('go');
   btn.disabled = true;
   statEl.textContent = 'đang kết nối...';
-  const token = $('token').value.trim();
+  statEl.style.color = '#888';
   
-  if (!token) {
-    statEl.textContent = 'lỗi: cần token';
-    btn.disabled = false;
-    return;
-  }
-
   try {
     const r = await fetch('/api/bot-login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token })
+      body: JSON.stringify({ token: $('token').value.trim() })
     });
     const j = await r.json();
     if (!j.ok) throw new Error(j.error || 'lỗi kết nối');
@@ -71,6 +115,41 @@ $('go').onclick = async () => {
   } catch (e) {
     statEl.textContent = 'lỗi: ' + e.message;
     statEl.style.color = '#f44';
+  } finally {
+    btn.disabled = false;
+  }
+};
+
+$('save').onclick = async () => {
+  const btn = $('save');
+  btn.disabled = true;
+  saveStat.textContent = 'đang lưu...';
+  saveStat.style.color = '#888';
+  
+  try {
+    const payload = {
+      channelName: $('channelName').value.trim(),
+      renameName: $('renameName').value.trim(),
+      channelCount: parseInt($('channelCount').value, 10),
+      msgContent: $('msgContent').value,
+      msgCount: parseInt($('msgCount').value, 10),
+      pingEveryone: $('pingEveryone').checked
+    };
+    
+    const r = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error);
+    
+    saveStat.textContent = 'đã lưu!';
+    saveStat.style.color = '#4c4';
+    setTimeout(() => saveStat.textContent = '', 2000);
+  } catch (e) {
+    saveStat.textContent = 'lỗi: ' + e.message;
+    saveStat.style.color = '#f44';
   } finally {
     btn.disabled = false;
   }
