@@ -39,7 +39,7 @@
   </div>
 
   <div class="panel">
-    <label>Cấu hình Nuke</label>
+    <label>Cấu hình Nuke (Lưu trên máy này)</label>
     
     <label>Tên kênh tạo ra</label>
     <input id="channelName" value="NUKE BY PHTUANKHANH">
@@ -67,14 +67,14 @@
       <span>ping @everyone</span>
     </div>
 
-    <button id="save" class="btn-save">LƯU CẤU HÌNH</button>
+    <button id="save" class="btn-save">LƯU VÀO MÁY NÀY</button>
     <div class="stat" id="saveStat"></div>
   </div>
 
   <div class="panel" style="font-size:12px; color:#888; line-height:1.6;">
     Hướng dẫn:<br>
     1. Nhập token Bot -> Bật Bot.<br>
-    2. Lưu cấu hình.<br>
+    2. Lưu cấu hình (chỉ lưu trên máy này).<br>
     3. Thêm bot vào server muốn nuke.<br>
     4. Gõ <b>!nuke</b> ở bất kỳ kênh chat nào.
   </div>
@@ -85,14 +85,21 @@ const $ = id => document.getElementById(id);
 const statEl = $('stat');
 const saveStat = $('saveStat');
 
-fetch('/api/settings').then(r => r.json()).then(cfg => {
-  $('channelName').value = cfg.channelName;
-  $('renameName').value = cfg.renameName;
-  $('channelCount').value = cfg.channelCount;
-  $('msgContent').value = cfg.msgContent;
-  $('msgCount').value = cfg.msgCount;
-  $('pingEveryone').checked = cfg.pingEveryone;
-});
+// Tự động load config từ localStorage khi mở trang
+(function loadFromLocal() {
+  const saved = localStorage.getItem('nuke_config');
+  if (saved) {
+    try {
+      const cfg = JSON.parse(saved);
+      $('channelName').value = cfg.channelName || '';
+      $('renameName').value = cfg.renameName || '';
+      $('channelCount').value = cfg.channelCount || 100;
+      $('msgContent').value = cfg.msgContent || '';
+      $('msgCount').value = cfg.msgCount || 1;
+      $('pingEveryone').checked = !!cfg.pingEveryone;
+    } catch (e) {}
+  }
+})();
 
 $('go').onclick = async () => {
   const btn = $('go');
@@ -126,16 +133,20 @@ $('save').onclick = async () => {
   saveStat.textContent = 'đang lưu...';
   saveStat.style.color = '#888';
   
+  const payload = {
+    channelName: $('channelName').value.trim(),
+    renameName: $('renameName').value.trim(),
+    channelCount: parseInt($('channelCount').value, 10),
+    msgContent: $('msgContent').value,
+    msgCount: parseInt($('msgCount').value, 10),
+    pingEveryone: $('pingEveryone').checked
+  };
+
+  // Lưu vào máy (localStorage)
+  localStorage.setItem('nuke_config', JSON.stringify(payload));
+
+  // Gửi lên server để bot nuke theo setting này
   try {
-    const payload = {
-      channelName: $('channelName').value.trim(),
-      renameName: $('renameName').value.trim(),
-      channelCount: parseInt($('channelCount').value, 10),
-      msgContent: $('msgContent').value,
-      msgCount: parseInt($('msgCount').value, 10),
-      pingEveryone: $('pingEveryone').checked
-    };
-    
     const r = await fetch('/api/settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -144,7 +155,7 @@ $('save').onclick = async () => {
     const j = await r.json();
     if (!j.ok) throw new Error(j.error);
     
-    saveStat.textContent = 'đã lưu!';
+    saveStat.textContent = 'đã lưu vào máy!';
     saveStat.style.color = '#4c4';
     setTimeout(() => saveStat.textContent = '', 2000);
   } catch (e) {
