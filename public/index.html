@@ -17,8 +17,8 @@
   button { width:100%; background:var(--acc); color:#000; border:0; padding:14px; font-weight:bold; letter-spacing:2px; cursor:pointer; font-family:inherit; font-size:13px; margin-top:12px; }
   button:hover { background:#f66; }
   button:disabled { background:#333; color:#666; cursor:not-allowed; }
-  .btn-outline { background:transparent; border:1px solid var(--acc); color:var(--acc); }
-  .btn-outline:hover { background:rgba(255,68,68,0.1); }
+  .btn-outline { background:transparent; border:1px solid #444; color:#ccc; }
+  .btn-outline:hover { background:#222; border-color:#666; }
   .btn-add { background:#5865F2; color:#fff; text-decoration:none; display:block; text-align:center; margin-top:12px; padding:12px; font-weight:bold; border-radius:4px; }
   .btn-add:hover { background:#4752C4; }
   .btn-off { background:#333; color:#fff; }
@@ -41,7 +41,7 @@
 <h1>// NUKE BOT</h1>
 <div class="wrap">
   
-  <!-- TRẠNG THÁI BAN ĐẦU: CHỈ CÓ TOKEN -->
+  <!-- FORM ĐĂNG NHẬP -->
   <div class="panel" id="loginPanel">
     <label>Nhập Token Bot</label>
     <input id="token" type="password" placeholder="MTA...">
@@ -55,9 +55,11 @@
       Trạng thái: <b id="botTag" style="color:var(--grn)"></b>
     </div>
     
-    <div class="flex-row">
-      <a href="#" id="btnAdd" target="_blank" class="btn-add">ADD BOT VÀO SERVER</a>
+    <a href="#" id="btnAdd" target="_blank" class="btn-add">ADD BOT VÀO SERVER</a>
+    
+    <div class="flex-row" style="margin-top:8px;">
       <button id="btnLogout" class="btn-off">TẮT BOT</button>
+      <button id="btnChangeToken" class="btn-outline">ĐỔI TOKEN</button>
     </div>
 
     <p style="font-size:12px; color:#888; margin-top:16px; text-align:center; line-height:1.6;">
@@ -79,19 +81,16 @@ const loginPanel = $('loginPanel');
 const controlPanel = $('controlPanel');
 const logBox = $('logBox');
 
-// --- QUẢN LÝ UI ---
 function setOnlineUI(isOnline, user = '', clientId = '') {
   if (isOnline) {
     loginPanel.classList.add('hidden');
     controlPanel.classList.remove('hidden');
     $('botTag').textContent = user;
     
-    // Tạo link add bot
     const permissions = 8; // Admin
     const scope = 'bot%20applications.commands';
     $('btnAdd').href = `https://discord.com/oauth2/authorize?client_id=${clientId}&permissions=${permissions}&scope=${scope}`;
     
-    // Lưu token để lần sau F5 còn biết
     localStorage.setItem('nuke_token', tokenInput.value);
   } else {
     loginPanel.classList.remove('hidden');
@@ -114,7 +113,6 @@ function renderLogs(logs) {
   logBox.scrollTop = logBox.scrollHeight;
 }
 
-// --- POLL LOG ---
 setInterval(async () => {
   try {
     const r = await fetch('/api/logs');
@@ -123,7 +121,6 @@ setInterval(async () => {
   } catch (e) {}
 }, 1500);
 
-// --- CHECK STATUS KHI MỞ TRANG ---
 async function checkStatus() {
   try {
     const r = await fetch('/api/status');
@@ -139,7 +136,6 @@ async function checkStatus() {
 }
 checkStatus();
 
-// --- ACTION: BẬT BOT ---
 $('btnLogin').onclick = async () => {
   const btn = $('btnLogin');
   const token = tokenInput.value.trim();
@@ -163,7 +159,6 @@ $('btnLogin').onclick = async () => {
     const j = await r.json();
     
     if (!j.ok) throw new Error(j.error || 'Lỗi kết nối');
-    
     setOnlineUI(true, j.user, j.clientId);
   } catch (e) {
     stat.textContent = 'Lỗi: ' + e.message;
@@ -173,10 +168,10 @@ $('btnLogin').onclick = async () => {
   }
 };
 
-// --- ACTION: TẮT BOT ---
 $('btnLogout').onclick = async () => {
   const btn = $('btnLogout');
   btn.disabled = true;
+  btn.textContent = 'ĐANG TẮT...';
   try {
     await fetch('/api/logout', { method: 'POST' });
     setOnlineUI(false);
@@ -184,7 +179,16 @@ $('btnLogout').onclick = async () => {
     alert('Lỗi tắt bot');
   } finally {
     btn.disabled = false;
+    btn.textContent = 'TẮT BOT';
   }
+};
+
+$('btnChangeToken').onclick = () => {
+  // Ẩn panel điều khiển, hiện panel login mà không cần logout
+  loginPanel.classList.remove('hidden');
+  controlPanel.classList.add('hidden');
+  tokenInput.value = '';
+  tokenInput.focus();
 };
 </script>
 </body>
