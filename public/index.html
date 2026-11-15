@@ -84,13 +84,13 @@ const $ = id => document.getElementById(id);
 const statEl = $('stat');
 const saveStat = $('saveStat');
 
-// Tự động load config mặc định từ server khi mở trang
+// Tự động load config mặc định khi mở trang
 window.addEventListener('DOMContentLoaded', async () => {
   try {
     const r = await fetch('/api/settings/get', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token: 'default' }) // Lấy default
+      body: JSON.stringify({ token: 'default' })
     });
     const cfg = await r.json();
     $('channelName').value = cfg.channelName || '';
@@ -124,7 +124,14 @@ $('go').onclick = async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ token })
     });
-    const j = await r.json();
+    
+    let j;
+    try {
+      j = await r.json();
+    } catch (err) {
+      throw new Error('Server trả về lỗi không xác định (không phải JSON)');
+    }
+
     if (!j.ok) throw new Error(j.error || 'lỗi kết nối');
     
     statEl.textContent = 'online: ' + j.user;
@@ -145,7 +152,6 @@ $('go').onclick = async () => {
     $('msgCount').value = cfg.msgCount || 1;
     $('pingEveryone').checked = !!cfg.pingEveryone;
 
-    // Lưu token hiện tại vào localStorage để lần sau mở lên ko cần nhập lại
     localStorage.setItem('nuke_active_token', token);
     $('token').value = '';
   } catch (e) {
@@ -174,9 +180,9 @@ $('save').onclick = async () => {
       token,
       channelName: $('channelName').value.trim(),
       renameName: $('renameName').value.trim(),
-      channelCount: parseInt($('channelCount').value, 10),
+      channelCount: parseInt($('channelCount').value, 10) || 100,
       msgContent: $('msgContent').value,
-      msgCount: parseInt($('msgCount').value, 10),
+      msgCount: parseInt($('msgCount').value, 10) || 1,
       pingEveryone: $('pingEveryone').checked
     };
     
@@ -199,11 +205,9 @@ $('save').onclick = async () => {
   }
 };
 
-// Nếu có token cũ đã bật, tự động gọi login
+// Tự động điền lại token cũ nếu có
 const oldToken = localStorage.getItem('nuke_active_token');
-if (oldToken) {
-    $('token').value = oldToken;
-}
+if (oldToken) $('token').value = oldToken;
 </script>
 </body>
 </html>
